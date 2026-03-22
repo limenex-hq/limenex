@@ -29,12 +29,14 @@ __all__ = [
 # Warnings
 # ---------------------------------------------------------------------------
 
+
 class LimenexConfigWarning(UserWarning):
     """Warnings emitted for Limenex policy configuration issues.
 
     Filter or suppress independently of other UserWarnings:
         warnings.filterwarnings("ignore", category=LimenexConfigWarning)
     """
+
 
 # ---------------------------------------------------------------------------
 # Verdict
@@ -52,14 +54,16 @@ _VALID_BREACH_VERDICTS: frozenset[str] = frozenset(get_args(BreachVerdict))
 Operator = Literal["lt", "lte", "gt", "gte", "eq", "neq"]
 
 # Private — used internally by engine.py only.
-_OPERATOR_FNS: MappingProxyType[str, Callable[[float, float], bool]] = MappingProxyType({
-    "lt":  lambda current, val: current < val,
-    "lte": lambda current, val: current <= val,
-    "gt":  lambda current, val: current > val,
-    "gte": lambda current, val: current >= val,
-    "eq":  lambda current, val: current == val,
-    "neq": lambda current, val: current != val,
-})
+_OPERATOR_FNS: MappingProxyType[str, Callable[[float, float], bool]] = MappingProxyType(
+    {
+        "lt": lambda current, val: current < val,
+        "lte": lambda current, val: current <= val,
+        "gt": lambda current, val: current > val,
+        "gte": lambda current, val: current >= val,
+        "eq": lambda current, val: current == val,
+        "neq": lambda current, val: current != val,
+    }
+)
 
 if set(get_args(Operator)) != set(_OPERATOR_FNS.keys()):
     raise RuntimeError(
@@ -70,6 +74,7 @@ if set(get_args(Operator)) != set(_OPERATOR_FNS.keys()):
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
+
 
 class UnregisteredSkillError(Exception):
     """Raised when a skill_id is not registered in the PolicyStore.
@@ -86,6 +91,7 @@ class UnregisteredSkillError(Exception):
 # ---------------------------------------------------------------------------
 # DeterministicPolicy
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class DeterministicPolicy:
@@ -144,9 +150,7 @@ class DeterministicPolicy:
                 f"Must be one of: {list(_OPERATOR_FNS.keys())}."
             )
         if not math.isfinite(self.value):
-            raise ValueError(
-                f"value must be a finite number, got {self.value!r}."
-            )
+            raise ValueError(f"value must be a finite number, got {self.value!r}.")
         if self.breach_verdict not in _VALID_BREACH_VERDICTS:
             raise ValueError(
                 f"Invalid breach_verdict '{self.breach_verdict}'. "
@@ -169,6 +173,7 @@ class DeterministicPolicy:
 # ---------------------------------------------------------------------------
 # SemanticPolicy
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SemanticPolicy:
@@ -209,6 +214,7 @@ class SemanticPolicy:
 # PolicyConfig
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PolicyConfig:
     """All governance policies for a single skill.
@@ -237,9 +243,7 @@ class PolicyConfig:
         ])
     """
 
-    policies: list[DeterministicPolicy | SemanticPolicy] = field(
-        default_factory=list
-    )
+    policies: list[DeterministicPolicy | SemanticPolicy] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.policies, list):
@@ -262,6 +266,7 @@ class PolicyConfig:
 # ---------------------------------------------------------------------------
 # StateStore
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class StateStore(Protocol):
@@ -296,6 +301,7 @@ class AsyncStateStore(Protocol):
 # ---------------------------------------------------------------------------
 # PolicyStore
 # ---------------------------------------------------------------------------
+
 
 @runtime_checkable
 class PolicyStore(Protocol):

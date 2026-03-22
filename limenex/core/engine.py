@@ -82,17 +82,11 @@ class EvaluationResult:
 
     def __post_init__(self) -> None:
         if self.verdict != "ALLOW" and self.triggered_by is None:
-            raise ValueError(
-                "triggered_by must be set when verdict is not ALLOW."
-            )
+            raise ValueError("triggered_by must be set when verdict is not ALLOW.")
         if self.verdict == "ALLOW" and self.triggered_by is not None:
-            raise ValueError(
-                "triggered_by must be None when verdict is ALLOW."
-            )
+            raise ValueError("triggered_by must be None when verdict is ALLOW.")
         if self.verdict != "ALLOW" and self._record_targets:
-            raise ValueError(
-                "_record_targets must be empty when verdict is not ALLOW."
-            )
+            raise ValueError("_record_targets must be empty when verdict is not ALLOW.")
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +131,9 @@ class PolicyEngine:
         # Cached once at instantiation — store types are immutable after init.
         self._policy_store_is_async = asyncio.iscoroutinefunction(policy_store.get)
         self._state_store_get_is_async = asyncio.iscoroutinefunction(state_store.get)
-        self._state_store_record_is_async = asyncio.iscoroutinefunction(state_store.record)
+        self._state_store_record_is_async = asyncio.iscoroutinefunction(
+            state_store.record
+        )
 
     async def evaluate(
         self,
@@ -234,7 +230,8 @@ class PolicyEngine:
 
                 if (
                     raw not in _VERDICT_SEVERITY
-                    or _VERDICT_SEVERITY[raw] > _VERDICT_SEVERITY[policy.verdict_ceiling]
+                    or _VERDICT_SEVERITY[raw]
+                    > _VERDICT_SEVERITY[policy.verdict_ceiling]
                 ):
                     final_verdict: Verdict = policy.verdict_ceiling
                 else:
