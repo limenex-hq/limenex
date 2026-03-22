@@ -5,6 +5,8 @@ engine.py — Policy evaluation engine for Limenex.
 from __future__ import annotations
 
 import asyncio
+import functools
+import inspect
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, cast, get_args
 
@@ -22,6 +24,8 @@ from .policy import (
 
 __all__ = [
     "LimenexConfigError",
+    "BlockedError",
+    "EscalationRequired",
     "EvaluationResult",
     "PolicyEngine",
     "UnregisteredSkillError",
@@ -49,8 +53,41 @@ class LimenexConfigError(Exception):
 
     Distinct from UnregisteredSkillError (unknown skill_id) — this covers
     engine-level configuration errors: missing llm_evaluator for a
-    SemanticPolicy, param absent from kwargs, or non-numeric param value.
+    SemanticPolicy, param absent from kwargs, non-numeric param value, or
+    agent_id_param absent from decorated skill arguments.
     """
+
+
+class BlockedError(Exception):
+    """Raised by @governed when a skill call is hard-stopped by policy.
+
+    The skill function was never executed.
+
+    Attributes:
+        result: The full EvaluationResult, including triggered_by.
+    """
+
+    def __init__(self, result: EvaluationResult) -> None:
+        self.result = result
+        super().__init__(
+            f"Skill '{result.skill_id}' blocked by policy: {result.triggered_by}"
+        )
+
+
+class EscalationRequired(Exception):
+    """Raised by @governed when a skill call must be routed to a human approver.
+
+    The skill function was never executed.
+
+    Attributes:
+        result: The full EvaluationResult, including triggered_by.
+    """
+
+    def __init__(self, result: EvaluationResult) -> None:
+        self.result = result
+        super().__init__(
+            f"Skill '{result.skill_id}' requires escalation: {result.triggered_by}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -272,3 +309,102 @@ class PolicyEngine:
                 cast(StateStore, self._state_store).record(
                     result.agent_id, dimension, value
                 )
+
+    def governed(
+        self,
+        skill_id: str,
+        agent_id_param: str = "agent_id",
+    ) -> Callable:
+        """Decorator that intercepts a skill call and evaluates it against policy.
+
+        Fetches the agent_id from the decorated function's arguments at call
+        time using agent_id_param. Raises BlockedError or EscalationRequired
+        on non-ALLOW verdicts — the skill function is never executed in either
+        case. Calls engine.record() only after the skill returns successfully;
+        if the skill itself raises, the exception propagates and record() is
+        not called.
+
+        Transparently supports both def and async def skill functions.
+        Sync skills wrapped by @governed run evaluate() and record() via
+        asyncio.run() — do not call sync governed skills from within a
+        running event loop. Use async def for skills called in async contexts.
+
+        Usage:
+            @engine.governed("charge_card", agent_id_param="agent_id")
+            async def charge_card(agent_id: str, amount: float) -> str: ...
+
+        Args:
+            skill_id:        The registered skill identifier. Must match a
+                             skill_id known to the engine's policy_store.
+            agent_id_param:  Name of the function argument that carries the
+                             agent identifier. Defaults to "agent_id".
+
+        Raises:
+            BlockedError:           Verdict is BLOCK — skill was not executed.
+            EscalationRequired:     Verdict is ESCALATE — skill was not executed.
+            LimenexConfigError:     agent_id_param not found in skill arguments.
+            UnregisteredSkillError: skill_id not registered in policy_store.
+        """
+
+        def decorator(
+            fn: Callable,
+        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+            sig = inspect.signature(fn)
+
+            if asyncio.iscoroutinefunction(fn):
+
+                @functools.wraps(fn)
+                async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                    bound = sig.bind(*args, **kwargs)
+                    bound.apply_defaults()
+                    if agent_id_param not in bound.arguments:
+                        raise LimenexConfigError(
+                            f"@governed could not find agent_id_param='{agent_id_param}' "
+                            f"in the arguments of skill '{fn.__name__}'. "
+                            f"Ensure the skill function accepts this argument."
+                        )
+                    agent_id = bound.arguments[agent_id_param]
+                    result = await self.evaluate(
+                        skill_id, agent_id, dict(bound.arguments)
+                    )
+                    if result.verdict == "BLOCK":
+                        raise BlockedError(result)
+                    if result.verdict == "ESCALATE":
+                        raise EscalationRequired(result)
+                    ret = await fn(*args, **kwargs)
+                    await self.record(result)
+                    return ret
+
+                return async_wrapper
+
+            else:
+
+                @functools.wraps(fn)
+                def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                    bound = sig.bind(*args, **kwargs)
+                    bound.apply_defaults()
+                    if agent_id_param not in bound.arguments:
+                        raise LimenexConfigError(
+                            f"@governed could not find agent_id_param='{agent_id_param}' "
+                            f"in the arguments of skill '{fn.__name__}'. "
+                            f"Ensure the skill function accepts this argument."
+                        )
+                    agent_id = bound.arguments[agent_id_param]
+
+                    async def _run() -> Any:
+                        result = await self.evaluate(
+                            skill_id, agent_id, dict(bound.arguments)
+                        )
+                        if result.verdict == "BLOCK":
+                            raise BlockedError(result)
+                        if result.verdict == "ESCALATE":
+                            raise EscalationRequired(result)
+                        ret = fn(*args, **kwargs)
+                        await self.record(result)
+                        return ret
+
+                    return asyncio.run(_run())
+
+                return sync_wrapper
+
+        return decorator
