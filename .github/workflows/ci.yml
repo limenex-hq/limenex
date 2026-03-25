@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install black ruff pytest
+        run: pip install -e ".[dev]" black ruff
 
       - name: Run black check
         run: black --check .

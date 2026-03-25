@@ -24,6 +24,11 @@ classifiers = [
 target-version = ["py310", "py311", "py312"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
 asyncio_mode = "auto"
 
 [project.optional-dependencies]
