@@ -8,7 +8,7 @@ import asyncio
 import functools
 import inspect
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, cast, get_args
+from typing import Any, Awaitable, Callable, cast, get_args, Protocol
 
 from .policy import (
     _OPERATOR_FNS,
@@ -23,6 +23,7 @@ from .policy import (
 )
 
 __all__ = [
+    "AuditLogger",
     "LimenexConfigError",
     "BlockedError",
     "EscalationRequired",
@@ -42,6 +43,22 @@ if set(get_args(Verdict)) != set(_VERDICT_SEVERITY.keys()):
         "Verdict and _VERDICT_SEVERITY are out of sync. "
         "Update both together when adding or removing verdicts."
     )
+
+# ---------------------------------------------------------------------------
+# Protocols
+# ---------------------------------------------------------------------------
+
+
+class AuditLogger(Protocol):
+    """Protocol for audit loggers passed to PolicyEngine.
+
+    Called by @governed after every evaluate(), regardless of verdict.
+    The skill never executes before log() is called — audit is always
+    written even on BLOCK or ESCALATE.
+    """
+
+    def log(self, result: EvaluationResult, kwargs: dict[str, Any]) -> None: ...
+
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -149,6 +166,9 @@ class PolicyEngine:
                         Signature: fn(action_intent: str, rule: str) -> Verdict.
                         Sync and async callables are both supported.
                         Required only when policies include SemanticPolicy entries.
+        audit_logger:  Optional logger implementing the AuditLogger protocol.
+               Called after every evaluate(), regardless of verdict.
+               Audit failures never propagate to the skill call.
     """
 
     def __init__(
@@ -160,10 +180,12 @@ class PolicyEngine:
             | Callable[[str, str], Awaitable[Verdict]]
             | None
         ) = None,
+        audit_logger: AuditLogger | None = None,
     ) -> None:
         self._policy_store = policy_store
         self._state_store = state_store
         self._llm_evaluator = llm_evaluator
+        self._audit_logger = audit_logger
 
         # Cached once at instantiation — store types are immutable after init.
         self._policy_store_is_async = asyncio.iscoroutinefunction(policy_store.get)
@@ -348,7 +370,7 @@ class PolicyEngine:
 
         def decorator(
             fn: Callable,
-        ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        ) -> Callable[..., Any]:
             sig = inspect.signature(fn)
 
             if asyncio.iscoroutinefunction(fn):
@@ -367,6 +389,9 @@ class PolicyEngine:
                     result = await self.evaluate(
                         skill_id, agent_id, dict(bound.arguments)
                     )
+                    if self._audit_logger is not None:
+                        self._audit_logger.log(result, dict(bound.arguments))
+
                     if result.verdict == "BLOCK":
                         raise BlockedError(result)
                     if result.verdict == "ESCALATE":
@@ -395,6 +420,9 @@ class PolicyEngine:
                         result = await self.evaluate(
                             skill_id, agent_id, dict(bound.arguments)
                         )
+                        if self._audit_logger is not None:
+                            self._audit_logger.log(result, dict(bound.arguments))
+
                         if result.verdict == "BLOCK":
                             raise BlockedError(result)
                         if result.verdict == "ESCALATE":
