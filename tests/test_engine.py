@@ -120,7 +120,7 @@ async def test_allow_no_policies():
 async def test_allow_deterministic_within_limit():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -139,7 +139,7 @@ async def test_allow_deterministic_within_limit():
 async def test_block_deterministic_exceeds_limit():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -154,7 +154,7 @@ async def test_block_deterministic_exceeds_limit():
 async def test_block_deterministic_with_accumulated_state():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -176,7 +176,7 @@ async def test_block_deterministic_with_accumulated_state():
 async def test_escalate_deterministic():
     policy = DeterministicPolicy(
         dimension="count",
-        operator="<=",
+        operator="lte",
         value=5.0,
         breach_verdict="ESCALATE",
     )
@@ -197,7 +197,7 @@ async def test_escalate_deterministic():
 async def test_projective_check_adds_proposed_to_current():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -214,7 +214,7 @@ async def test_projective_check_adds_proposed_to_current():
 async def test_non_projective_check_uses_current_state_only():
     policy = DeterministicPolicy(
         dimension="count",
-        operator="<=",
+        operator="lte",
         value=5.0,
         breach_verdict="ESCALATE",
     )
@@ -236,14 +236,14 @@ async def test_non_projective_check_uses_current_state_only():
 async def test_short_circuit_on_first_breach():
     p1 = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
     )
     p2 = DeterministicPolicy(
         dimension="count",
-        operator="<=",
+        operator="lte",
         value=5.0,
         breach_verdict="ESCALATE",
     )
@@ -336,7 +336,7 @@ async def test_semantic_missing_llm_evaluator_raises():
 async def test_async_policy_store():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -351,7 +351,7 @@ async def test_async_policy_store():
 async def test_async_state_store():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -371,7 +371,7 @@ async def test_async_state_store():
 async def test_missing_param_in_kwargs_raises():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -384,7 +384,7 @@ async def test_missing_param_in_kwargs_raises():
 async def test_non_numeric_param_raises():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -420,7 +420,7 @@ async def test_unregistered_skill_raises():
 async def test_record_persists_projective_value():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -435,7 +435,7 @@ async def test_record_persists_projective_value():
 async def test_record_persists_non_projective_as_one():
     policy = DeterministicPolicy(
         dimension="count",
-        operator="<=",
+        operator="lte",
         value=10.0,
         breach_verdict="ESCALATE",
     )
@@ -456,7 +456,7 @@ async def test_record_noop_on_empty_targets():
 async def test_record_uses_async_state_store():
     policy = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
@@ -472,14 +472,14 @@ async def test_record_uses_async_state_store():
 async def test_multiple_passing_policies_accumulate_record_targets():
     p1 = DeterministicPolicy(
         dimension="spend",
-        operator="<=",
+        operator="lte",
         value=100.0,
         param="amount",
         breach_verdict="BLOCK",
     )
     p2 = DeterministicPolicy(
         dimension="count",
-        operator="<=",
+        operator="lte",
         value=10.0,
         breach_verdict="ESCALATE",
     )
