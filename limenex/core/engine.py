@@ -8,7 +8,7 @@ import asyncio
 import functools
 import inspect
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, cast, get_args, Protocol
+from typing import Any, Awaitable, Callable, Protocol, cast, get_args
 
 from .policy import (
     _OPERATOR_FNS,

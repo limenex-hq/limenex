@@ -4,14 +4,12 @@ stores.py — Local file-backed implementation of StateStore.
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import tempfile
 import threading
 import warnings
 from pathlib import Path
-
-from .policy import StateStore
 
 __all__ = ["LocalFileStateStore"]
 
