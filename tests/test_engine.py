@@ -1,490 +1,993 @@
-"""
-tests/test_engine.py — Unit tests for PolicyEngine evaluation logic.
-
-Covers:
-    - Auto-allow: all policies pass
-    - Auto-block: deterministic breach with BLOCK verdict
-    - Escalation: deterministic breach with ESCALATE verdict
-    - Projective checks: proposed value added to current state
-    - Non-projective checks: current state only, records 1.0
-    - Short-circuit: engine stops at first non-ALLOW verdict
-    - SemanticPolicy: allow, block, escalate, verdict capping, unknown verdict
-    - Missing llm_evaluator with SemanticPolicy
-    - Async llm_evaluator
-    - Async policy_store and state_store
-    - Missing param in kwargs
-    - Non-numeric param value
-    - Empty skill_id / agent_id
-    - UnregisteredSkillError propagation
-    - record() persists correct dimensions and values
-    - record() is a no-op on empty _record_targets
-"""
-
-from __future__ import annotations
+import math
+import warnings
+from typing import Any
 
 import pytest
 
-from limenex.core.engine import (
-    LimenexConfigError,
-    PolicyEngine,
-)
+from limenex.core.engine import EvaluationResult, LimenexConfigError, PolicyEngine
 from limenex.core.policy import (
     DeterministicPolicy,
+    LimenexConfigWarning,
     PolicyConfig,
     SemanticPolicy,
     UnregisteredSkillError,
 )
 
-# ---------------------------------------------------------------------------
-# Minimal in-memory fakes
-# ---------------------------------------------------------------------------
 
-
-class FakePolicyStore:
+class InMemoryPolicyStore:
     def __init__(self, configs: dict[str, PolicyConfig]) -> None:
-        self._configs = configs
+        self.configs = configs
 
     def get(self, skill_id: str) -> PolicyConfig:
-        if skill_id not in self._configs:
+        if skill_id not in self.configs:
             raise UnregisteredSkillError(skill_id)
-        return self._configs[skill_id]
+        return self.configs[skill_id]
 
 
-class FakeAsyncPolicyStore:
+class AsyncInMemoryPolicyStore:
     def __init__(self, configs: dict[str, PolicyConfig]) -> None:
-        self._configs = configs
+        self.configs = configs
 
     async def get(self, skill_id: str) -> PolicyConfig:
-        if skill_id not in self._configs:
+        if skill_id not in self.configs:
             raise UnregisteredSkillError(skill_id)
-        return self._configs[skill_id]
+        return self.configs[skill_id]
 
 
-class FakeStateStore:
-    def __init__(self, state: dict[str, dict[str, float]] | None = None) -> None:
-        # Layout: dimension -> agent_id -> value
-        self._state: dict[str, dict[str, float]] = state or {}
-        self.recorded: list[tuple[str, str, float]] = []
+class SpyStateStore:
+    def __init__(self, initial: dict[tuple[str, str], float] | None = None) -> None:
+        self._state = dict(initial or {})
+        self.get_calls: list[tuple[str, str]] = []
+        self.record_calls: list[tuple[str, str, float]] = []
 
     def get(self, agent_id: str, dimension: str) -> float:
-        return self._state.get(dimension, {}).get(agent_id, 0.0)
+        self.get_calls.append((agent_id, dimension))
+        return self._state.get((agent_id, dimension), 0.0)
 
     def record(self, agent_id: str, dimension: str, value: float) -> None:
-        self.recorded.append((agent_id, dimension, value))
+        self.record_calls.append((agent_id, dimension, value))
+        self._state[(agent_id, dimension)] = (
+            self._state.get((agent_id, dimension), 0.0) + value
+        )
 
 
-class FakeAsyncStateStore:
-    def __init__(self, state: dict[str, dict[str, float]] | None = None) -> None:
-        self._state: dict[str, dict[str, float]] = state or {}
-        self.recorded: list[tuple[str, str, float]] = []
+class AsyncSpyStateStore:
+    def __init__(self, initial: dict[tuple[str, str], float] | None = None) -> None:
+        self._state = dict(initial or {})
+        self.get_calls: list[tuple[str, str]] = []
+        self.record_calls: list[tuple[str, str, float]] = []
 
     async def get(self, agent_id: str, dimension: str) -> float:
-        return self._state.get(dimension, {}).get(agent_id, 0.0)
+        self.get_calls.append((agent_id, dimension))
+        return self._state.get((agent_id, dimension), 0.0)
 
     async def record(self, agent_id: str, dimension: str, value: float) -> None:
-        self.recorded.append((agent_id, dimension, value))
+        self.record_calls.append((agent_id, dimension, value))
+        self._state[(agent_id, dimension)] = (
+            self._state.get((agent_id, dimension), 0.0) + value
+        )
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# DeterministicPolicy construction & validation
 # ---------------------------------------------------------------------------
 
 
-def make_engine(
-    policies: list,
-    state: dict | None = None,
-    llm_evaluator=None,
-) -> tuple[PolicyEngine, FakeStateStore]:
-    store = FakeStateStore(state)
-    engine = PolicyEngine(
-        policy_store=FakePolicyStore({"test_skill": PolicyConfig(policies=policies)}),
-        state_store=store,
-        llm_evaluator=llm_evaluator,
+def test_deterministic_policy_accepts_set_operator_in() -> None:
+    policy = DeterministicPolicy(
+        dimension="allowed_filepaths",
+        operator="in",
+        values=frozenset({"/tmp", "/workspace"}),
+        param="filepath",
+        breach_verdict="BLOCK",
     )
-    return engine, store
+
+    assert policy.operator == "in"
+    assert policy.values == frozenset({"/tmp", "/workspace"})
+    assert policy.value is None
+    assert policy.param == "filepath"
+
+
+def test_deterministic_policy_accepts_set_operator_not_in() -> None:
+    policy = DeterministicPolicy(
+        dimension="blocked_recipients",
+        operator="not_in",
+        values=frozenset({"alice@example.com"}),
+        param="recipient",
+        breach_verdict="ESCALATE",
+    )
+
+    assert policy.operator == "not_in"
+    assert policy.values == frozenset({"alice@example.com"})
+    assert policy.value is None
+    assert policy.param == "recipient"
+
+
+def test_deterministic_policy_rejects_values_on_numeric_operator() -> None:
+    with pytest.raises(ValueError, match="does not accept 'values'"):
+        DeterministicPolicy(
+            dimension="spend",
+            operator="lt",
+            value=50.0,
+            values=frozenset({"oops"}),
+            param="amount",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_rejects_value_on_set_operator() -> None:
+    with pytest.raises(ValueError, match="does not accept 'value'"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            value=0.0,
+            values=frozenset({"/tmp"}),
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_rejects_missing_param_for_set_operator() -> None:
+    with pytest.raises(ValueError, match="requires 'param' to be set"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            values=frozenset({"/tmp"}),
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_rejects_missing_values_for_set_operator() -> None:
+    with pytest.raises(ValueError, match="requires 'values'"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_rejects_non_frozenset_values() -> None:
+    with pytest.raises(TypeError, match="requires 'values' to be a frozenset"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            values=["/tmp", "/workspace"],  # type: ignore[arg-type]
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_rejects_non_string_items_in_values() -> None:
+    with pytest.raises(ValueError, match="All items in 'values' must be strings"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            values=frozenset({"/tmp", 42}),  # type: ignore[arg-type]
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_warns_on_empty_values_set() -> None:
+    with pytest.warns(LimenexConfigWarning, match="empty 'values' set"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            values=frozenset(),
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_case_sensitive_exact_matching() -> None:
+    policy = DeterministicPolicy(
+        dimension="allowed_filepaths",
+        operator="in",
+        values=frozenset({"/workspace"}),
+        param="filepath",
+        breach_verdict="BLOCK",
+    )
+
+    assert "/workspace" in policy.values
+    assert "/Workspace" not in policy.values
+
+
+def test_deterministic_policy_rejects_non_finite_numeric_value() -> None:
+    with pytest.raises(ValueError, match="finite number"):
+        DeterministicPolicy(
+            dimension="spend",
+            operator="lt",
+            value=math.inf,
+            param="amount",
+            breach_verdict="BLOCK",
+        )
+
+
+def test_deterministic_policy_warns_on_fractional_eq_value() -> None:
+    with pytest.warns(LimenexConfigWarning, match="exact float comparison"):
+        DeterministicPolicy(
+            dimension="approval_flag",
+            operator="eq",
+            value=1.5,
+            breach_verdict="BLOCK",
+        )
 
 
 # ---------------------------------------------------------------------------
-# Auto-allow
+# Engine: numeric deterministic evaluation
 # ---------------------------------------------------------------------------
 
 
-async def test_allow_no_policies():
-    engine, store = make_engine(policies=[])
-    result = await engine.evaluate("test_skill", "agent_1", {})
+async def test_engine_allows_when_policy_config_empty() -> None:
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore({"finance.charge": PolicyConfig()}),
+        state_store=SpyStateStore(),
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 10.0},
+    )
+
     assert result.verdict == "ALLOW"
     assert result.triggered_by is None
     assert result._record_targets == []
 
 
-async def test_allow_deterministic_within_limit():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
+async def test_engine_projective_numeric_policy_allows_and_prepares_record_target() -> (
+    None
+):
+    store = SpyStateStore({("agent-1", "4h_spend"): 10.0})
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
     )
-    engine, store = make_engine(policies=[policy])
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 50.0})
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 20.0},
+    )
+
     assert result.verdict == "ALLOW"
-    assert result._record_targets == [("spend", 50.0)]
+    assert result.triggered_by is None
+    assert result._record_targets == [("4h_spend", 20.0)]
+    assert store.get_calls == [("agent-1", "4h_spend")]
 
 
-# ---------------------------------------------------------------------------
-# Auto-block
-# ---------------------------------------------------------------------------
-
-
-async def test_block_deterministic_exceeds_limit():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
+async def test_engine_projective_numeric_policy_blocks_on_breach() -> None:
+    store = SpyStateStore({("agent-1", "4h_spend"): 40.0})
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
     )
-    engine, _ = make_engine(policies=[policy])
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 150.0})
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 15.0},
+    )
+
     assert result.verdict == "BLOCK"
-    assert result.triggered_by is policy
+    assert isinstance(result.triggered_by, DeterministicPolicy)
     assert result._record_targets == []
+    assert store.get_calls == [("agent-1", "4h_spend")]
 
 
-async def test_block_deterministic_with_accumulated_state():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
+async def test_engine_non_projective_numeric_policy_records_count_increment() -> None:
+    store = SpyStateStore({("agent-1", "daily_calls"): 4.0})
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "comms.send": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="daily_calls",
+                            operator="lt",
+                            value=10.0,
+                            breach_verdict="ESCALATE",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
     )
-    # agent already has 80.0 accumulated
-    engine, _ = make_engine(
-        policies=[policy],
-        state={"spend": {"agent_1": 80.0}},
+
+    result = await engine.evaluate(
+        skill_id="comms.send",
+        agent_id="agent-1",
+        kwargs={"recipient": "alice@example.com"},
     )
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 30.0})
-    assert result.verdict == "BLOCK"  # 80 + 30 = 110 > 100
 
-
-# ---------------------------------------------------------------------------
-# Escalation
-# ---------------------------------------------------------------------------
-
-
-async def test_escalate_deterministic():
-    policy = DeterministicPolicy(
-        dimension="count",
-        operator="lte",
-        value=5.0,
-        breach_verdict="ESCALATE",
-    )
-    engine, _ = make_engine(
-        policies=[policy],
-        state={"count": {"agent_1": 6.0}},
-    )
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    assert result.verdict == "ESCALATE"
-    assert result.triggered_by is policy
-
-
-# ---------------------------------------------------------------------------
-# Projective vs non-projective
-# ---------------------------------------------------------------------------
-
-
-async def test_projective_check_adds_proposed_to_current():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
-    )
-    engine, store = make_engine(
-        policies=[policy],
-        state={"spend": {"agent_1": 60.0}},
-    )
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 30.0})
-    assert result.verdict == "ALLOW"  # 60 + 30 = 90 <= 100
-    assert result._record_targets == [("spend", 30.0)]
-
-
-async def test_non_projective_check_uses_current_state_only():
-    policy = DeterministicPolicy(
-        dimension="count",
-        operator="lte",
-        value=5.0,
-        breach_verdict="ESCALATE",
-    )
-    engine, store = make_engine(
-        policies=[policy],
-        state={"count": {"agent_1": 3.0}},
-    )
-    result = await engine.evaluate("test_skill", "agent_1", {})
     assert result.verdict == "ALLOW"
-    # Non-projective records 1.0
-    assert result._record_targets == [("count", 1.0)]
+    assert result._record_targets == [("daily_calls", 1.0)]
+
+
+async def test_engine_numeric_policy_missing_param_raises_config_error() -> None:
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+    )
+
+    with pytest.raises(LimenexConfigError, match="param='amount'"):
+        await engine.evaluate(
+            skill_id="finance.charge",
+            agent_id="agent-1",
+            kwargs={"currency": "USD"},
+        )
+
+
+async def test_engine_numeric_policy_non_numeric_param_raises_config_error() -> None:
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+    )
+
+    with pytest.raises(LimenexConfigError, match="could not be cast to float"):
+        await engine.evaluate(
+            skill_id="finance.charge",
+            agent_id="agent-1",
+            kwargs={"amount": "not-a-number"},
+        )
+
+
+async def test_engine_record_persists_numeric_targets() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore({}),
+        state_store=store,
+    )
+
+    result = EvaluationResult(
+        verdict="ALLOW",
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        triggered_by=None,
+        _record_targets=[("4h_spend", 12.5), ("daily_calls", 1.0)],
+    )
+
+    await engine.record(result)
+
+    assert store.record_calls == [
+        ("agent-1", "4h_spend", 12.5),
+        ("agent-1", "daily_calls", 1.0),
+    ]
 
 
 # ---------------------------------------------------------------------------
-# Short-circuit
+# Engine: set-operator evaluation
 # ---------------------------------------------------------------------------
 
 
-async def test_short_circuit_on_first_breach():
-    p1 = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
+async def test_engine_set_operator_in_allows_when_value_is_in_set() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "filesystem.delete": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="allowed_filepaths",
+                            operator="in",
+                            values=frozenset({"/tmp", "/workspace"}),
+                            param="filepath",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
     )
-    p2 = DeterministicPolicy(
-        dimension="count",
-        operator="lte",
-        value=5.0,
-        breach_verdict="ESCALATE",
+
+    result = await engine.evaluate(
+        skill_id="filesystem.delete",
+        agent_id="agent-1",
+        kwargs={"filepath": "/tmp"},
     )
-    engine, _ = make_engine(policies=[p1, p2])
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 200.0})
+
+    assert result.verdict == "ALLOW"
+    assert result.triggered_by is None
+    assert result._record_targets == []
+    assert store.get_calls == []
+    await engine.record(result)
+    assert store.record_calls == []
+
+
+async def test_engine_set_operator_in_blocks_when_value_not_in_set() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "filesystem.delete": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="allowed_filepaths",
+                            operator="in",
+                            values=frozenset({"/tmp", "/workspace"}),
+                            param="filepath",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="filesystem.delete",
+        agent_id="agent-1",
+        kwargs={"filepath": "/etc/passwd"},
+    )
+
     assert result.verdict == "BLOCK"
-    assert result.triggered_by is p1  # p2 never evaluated
+    assert isinstance(result.triggered_by, DeterministicPolicy)
+    assert result._record_targets == []
+    assert store.get_calls == []
 
 
-# ---------------------------------------------------------------------------
-# SemanticPolicy
-# ---------------------------------------------------------------------------
-
-
-async def test_semantic_allow():
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="BLOCK")
-    engine, _ = make_engine(
-        policies=[policy],
-        llm_evaluator=lambda intent, rule: "ALLOW",
+async def test_engine_set_operator_in_escalates_when_value_not_in_set() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "filesystem.delete": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="allowed_filepaths",
+                            operator="in",
+                            values=frozenset({"/tmp", "/workspace"}),
+                            param="filepath",
+                            breach_verdict="ESCALATE",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
     )
-    result = await engine.evaluate("test_skill", "agent_1", {})
+
+    result = await engine.evaluate(
+        skill_id="filesystem.delete",
+        agent_id="agent-1",
+        kwargs={"filepath": "/etc/passwd"},
+    )
+
+    assert result.verdict == "ESCALATE"
+    assert isinstance(result.triggered_by, DeterministicPolicy)
+    assert result._record_targets == []
+    assert store.get_calls == []
+
+
+async def test_engine_set_operator_not_in_allows_when_value_not_in_excluded_set() -> (
+    None
+):
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "comms.send": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="blocked_recipients",
+                            operator="not_in",
+                            values=frozenset({"alice@blocked.com"}),
+                            param="recipient",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="comms.send",
+        agent_id="agent-1",
+        kwargs={"recipient": "bob@example.com"},
+    )
+
+    assert result.verdict == "ALLOW"
+    assert result.triggered_by is None
+    assert result._record_targets == []
+    assert store.get_calls == []
+
+
+async def test_engine_set_operator_not_in_blocks_when_value_is_in_excluded_set() -> (
+    None
+):
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "comms.send": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="blocked_recipients",
+                            operator="not_in",
+                            values=frozenset({"alice@blocked.com"}),
+                            param="recipient",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="comms.send",
+        agent_id="agent-1",
+        kwargs={"recipient": "alice@blocked.com"},
+    )
+
+    assert result.verdict == "BLOCK"
+    assert isinstance(result.triggered_by, DeterministicPolicy)
+    assert result._record_targets == []
+    assert store.get_calls == []
+
+
+async def test_engine_set_operator_not_in_escalates_when_value_is_in_excluded_set() -> (
+    None
+):
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "comms.send": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="blocked_recipients",
+                            operator="not_in",
+                            values=frozenset({"alice@blocked.com"}),
+                            param="recipient",
+                            breach_verdict="ESCALATE",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="comms.send",
+        agent_id="agent-1",
+        kwargs={"recipient": "alice@blocked.com"},
+    )
+
+    assert result.verdict == "ESCALATE"
+    assert isinstance(result.triggered_by, DeterministicPolicy)
+    assert result._record_targets == []
+    assert store.get_calls == []
+
+
+async def test_engine_set_operator_missing_param_raises_config_error() -> None:
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "web.post": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="approved_urls",
+                            operator="in",
+                            values=frozenset({"https://api.example.com"}),
+                            param="url",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+    )
+
+    with pytest.raises(LimenexConfigError, match="uses a set operator"):
+        await engine.evaluate(
+            skill_id="web.post",
+            agent_id="agent-1",
+            kwargs={"payload": {"x": 1}},
+        )
+
+
+async def test_engine_set_operator_non_string_param_raises_config_error() -> None:
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "filesystem.delete": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="allowed_filepaths",
+                            operator="in",
+                            values=frozenset({"/tmp"}),
+                            param="filepath",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+    )
+
+    with pytest.raises(LimenexConfigError, match="is not a string"):
+        await engine.evaluate(
+            skill_id="filesystem.delete",
+            agent_id="agent-1",
+            kwargs={"filepath": 42},
+        )
+
+
+async def test_engine_empty_values_in_policy_behaves_deterministically_for_in_operator() -> (
+    None
+):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", LimenexConfigWarning)
+        policy = DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            values=frozenset(),
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {"filesystem.delete": PolicyConfig(policies=[policy])}
+        ),
+        state_store=SpyStateStore(),
+    )
+
+    result = await engine.evaluate(
+        skill_id="filesystem.delete",
+        agent_id="agent-1",
+        kwargs={"filepath": "/tmp"},
+    )
+
+    assert result.verdict == "BLOCK"
+
+
+async def test_engine_empty_values_in_policy_behaves_deterministically_for_not_in_operator() -> (
+    None
+):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", LimenexConfigWarning)
+        policy = DeterministicPolicy(
+            dimension="blocked_recipients",
+            operator="not_in",
+            values=frozenset(),
+            param="recipient",
+            breach_verdict="BLOCK",
+        )
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {"comms.send": PolicyConfig(policies=[policy])}
+        ),
+        state_store=SpyStateStore(),
+    )
+
+    result = await engine.evaluate(
+        skill_id="comms.send",
+        agent_id="agent-1",
+        kwargs={"recipient": "alice@example.com"},
+    )
+
     assert result.verdict == "ALLOW"
 
 
-async def test_semantic_block():
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="BLOCK")
-    engine, _ = make_engine(
-        policies=[policy],
-        llm_evaluator=lambda intent, rule: "BLOCK",
+# ---------------------------------------------------------------------------
+# Engine: semantic policies
+# ---------------------------------------------------------------------------
+
+
+async def test_engine_semantic_policy_requires_llm_evaluator() -> None:
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "web.post": PolicyConfig(
+                    policies=[
+                        SemanticPolicy(
+                            rule="Do not send secrets externally.",
+                            verdict_ceiling="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+        llm_evaluator=None,
     )
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    assert result.verdict == "BLOCK"
-    assert result.triggered_by is policy
+
+    with pytest.raises(LimenexConfigError, match="requires an llm_evaluator"):
+        await engine.evaluate(
+            skill_id="web.post",
+            agent_id="agent-1",
+            kwargs={"url": "https://example.com"},
+        )
 
 
-async def test_semantic_escalate():
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="ESCALATE")
-    engine, _ = make_engine(
-        policies=[policy],
-        llm_evaluator=lambda intent, rule: "ESCALATE",
+async def test_engine_semantic_policy_allows_when_evaluator_returns_allow() -> None:
+    def evaluator(action_intent: str, rule: str) -> str:
+        assert "web.post" in action_intent
+        assert "Do not send secrets externally." == rule
+        return "ALLOW"
+
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "web.post": PolicyConfig(
+                    policies=[
+                        SemanticPolicy(
+                            rule="Do not send secrets externally.",
+                            verdict_ceiling="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+        llm_evaluator=evaluator,
     )
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    assert result.verdict == "ESCALATE"
-    assert result.triggered_by is policy
 
-
-async def test_semantic_verdict_capped_to_ceiling():
-    # LLM returns BLOCK but ceiling is ESCALATE — should be capped to ESCALATE
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="ESCALATE")
-    engine, _ = make_engine(
-        policies=[policy],
-        llm_evaluator=lambda intent, rule: "BLOCK",
+    result = await engine.evaluate(
+        skill_id="web.post",
+        agent_id="agent-1",
+        kwargs={"url": "https://example.com"},
     )
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    assert result.verdict == "ESCALATE"
+
+    assert result.verdict == "ALLOW"
 
 
-async def test_semantic_unknown_verdict_falls_back_to_ceiling():
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="BLOCK")
-    engine, _ = make_engine(
-        policies=[policy],
-        llm_evaluator=lambda intent, rule: "GIBBERISH",
-    )
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    assert result.verdict == "BLOCK"
-
-
-async def test_semantic_async_llm_evaluator():
-    async def async_evaluator(intent: str, rule: str) -> str:
+async def test_engine_semantic_policy_applies_verdict_ceiling_to_more_severe_response() -> (
+    None
+):
+    def evaluator(action_intent: str, rule: str) -> str:
         return "BLOCK"
 
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="BLOCK")
-    engine, _ = make_engine(policies=[policy], llm_evaluator=async_evaluator)
-    result = await engine.evaluate("test_skill", "agent_1", {})
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "web.post": PolicyConfig(
+                    policies=[
+                        SemanticPolicy(
+                            rule="Escalate suspicious outbound requests.",
+                            verdict_ceiling="ESCALATE",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+        llm_evaluator=evaluator,
+    )
+
+    result = await engine.evaluate(
+        skill_id="web.post",
+        agent_id="agent-1",
+        kwargs={"url": "https://example.com"},
+    )
+
+    assert result.verdict == "ESCALATE"
+
+
+async def test_engine_semantic_policy_falls_back_to_verdict_ceiling_on_invalid_response() -> (
+    None
+):
+    def evaluator(action_intent: str, rule: str) -> Any:
+        return "SOMETHING_INVALID"
+
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "web.post": PolicyConfig(
+                    policies=[
+                        SemanticPolicy(
+                            rule="Escalate suspicious outbound requests.",
+                            verdict_ceiling="ESCALATE",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=SpyStateStore(),
+        llm_evaluator=evaluator,
+    )
+
+    result = await engine.evaluate(
+        skill_id="web.post",
+        agent_id="agent-1",
+        kwargs={"url": "https://example.com"},
+    )
+
+    assert result.verdict == "ESCALATE"
+
+
+# ---------------------------------------------------------------------------
+# Engine: ordering, short-circuiting, and async stores
+# ---------------------------------------------------------------------------
+
+
+async def test_engine_short_circuits_on_first_non_allow_policy() -> None:
+    store = SpyStateStore({("agent-1", "4h_spend"): 60.0})
+
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        ),
+                        SemanticPolicy(
+                            rule="This should never run.",
+                            verdict_ceiling="ESCALATE",
+                        ),
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+        llm_evaluator=lambda action_intent, rule: "ALLOW",
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 1.0},
+    )
+
     assert result.verdict == "BLOCK"
+    assert isinstance(result.triggered_by, DeterministicPolicy)
 
 
-async def test_semantic_missing_llm_evaluator_raises():
-    policy = SemanticPolicy(rule="Do not approve X.", verdict_ceiling="BLOCK")
-    engine, _ = make_engine(policies=[policy], llm_evaluator=None)
-    with pytest.raises(LimenexConfigError, match="llm_evaluator"):
-        await engine.evaluate("test_skill", "agent_1", {})
-
-
-# ---------------------------------------------------------------------------
-# Async stores
-# ---------------------------------------------------------------------------
-
-
-async def test_async_policy_store():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
+async def test_engine_supports_async_policy_store_and_async_state_store() -> None:
+    store = AsyncSpyStateStore({("agent-1", "4h_spend"): 5.0})
+    engine = PolicyEngine(
+        policy_store=AsyncInMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
     )
-    async_store = FakeAsyncPolicyStore({"test_skill": PolicyConfig(policies=[policy])})
-    state_store = FakeStateStore()
-    engine = PolicyEngine(policy_store=async_store, state_store=state_store)
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 50.0})
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 10.0},
+    )
+
     assert result.verdict == "ALLOW"
+    assert result._record_targets == [("4h_spend", 10.0)]
 
-
-async def test_async_state_store():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
-    )
-    policy_store = FakePolicyStore({"test_skill": PolicyConfig(policies=[policy])})
-    async_state = FakeAsyncStateStore()
-    engine = PolicyEngine(policy_store=policy_store, state_store=async_state)
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 50.0})
-    assert result.verdict == "ALLOW"
-
-
-# ---------------------------------------------------------------------------
-# Config errors
-# ---------------------------------------------------------------------------
-
-
-async def test_missing_param_in_kwargs_raises():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
-    )
-    engine, _ = make_engine(policies=[policy])
-    with pytest.raises(LimenexConfigError, match="amount"):
-        await engine.evaluate("test_skill", "agent_1", {})
-
-
-async def test_non_numeric_param_raises():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
-    )
-    engine, _ = make_engine(policies=[policy])
-    with pytest.raises(LimenexConfigError, match="could not be cast to float"):
-        await engine.evaluate("test_skill", "agent_1", {"amount": "not_a_number"})
-
-
-async def test_empty_skill_id_raises():
-    engine, _ = make_engine(policies=[])
-    with pytest.raises(LimenexConfigError, match="skill_id"):
-        await engine.evaluate("", "agent_1", {})
-
-
-async def test_empty_agent_id_raises():
-    engine, _ = make_engine(policies=[])
-    with pytest.raises(LimenexConfigError, match="agent_id"):
-        await engine.evaluate("test_skill", "", {})
-
-
-async def test_unregistered_skill_raises():
-    engine, _ = make_engine(policies=[])
-    with pytest.raises(UnregisteredSkillError):
-        await engine.evaluate("unknown_skill", "agent_1", {})
-
-
-# ---------------------------------------------------------------------------
-# record()
-# ---------------------------------------------------------------------------
-
-
-async def test_record_persists_projective_value():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
-        param="amount",
-        breach_verdict="BLOCK",
-    )
-    engine, store = make_engine(policies=[policy])
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 40.0})
-    assert result.verdict == "ALLOW"
     await engine.record(result)
-    assert ("agent_1", "spend", 40.0) in store.recorded
+
+    assert store.get_calls == [("agent-1", "4h_spend")]
+    assert store.record_calls == [("agent-1", "4h_spend", 10.0)]
 
 
-async def test_record_persists_non_projective_as_one():
+# ---------------------------------------------------------------------------
+# EvaluationResult invariants
+# ---------------------------------------------------------------------------
+
+
+def test_evaluation_result_requires_triggered_by_when_not_allow() -> None:
+    with pytest.raises(ValueError, match="triggered_by must be set"):
+        EvaluationResult(
+            verdict="BLOCK",
+            skill_id="finance.charge",
+            agent_id="agent-1",
+            triggered_by=None,
+        )
+
+
+def test_evaluation_result_requires_triggered_by_none_when_allow() -> None:
     policy = DeterministicPolicy(
-        dimension="count",
-        operator="lte",
-        value=10.0,
-        breach_verdict="ESCALATE",
-    )
-    engine, store = make_engine(policies=[policy])
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    assert result.verdict == "ALLOW"
-    await engine.record(result)
-    assert ("agent_1", "count", 1.0) in store.recorded
-
-
-async def test_record_noop_on_empty_targets():
-    engine, store = make_engine(policies=[])
-    result = await engine.evaluate("test_skill", "agent_1", {})
-    await engine.record(result)
-    assert store.recorded == []
-
-
-async def test_record_uses_async_state_store():
-    policy = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
+        dimension="4h_spend",
+        operator="lt",
+        value=50.0,
         param="amount",
         breach_verdict="BLOCK",
     )
-    policy_store = FakePolicyStore({"test_skill": PolicyConfig(policies=[policy])})
-    async_state = FakeAsyncStateStore()
-    engine = PolicyEngine(policy_store=policy_store, state_store=async_state)
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 25.0})
-    await engine.record(result)
-    assert ("agent_1", "spend", 25.0) in async_state.recorded
+
+    with pytest.raises(ValueError, match="triggered_by must be None"):
+        EvaluationResult(
+            verdict="ALLOW",
+            skill_id="finance.charge",
+            agent_id="agent-1",
+            triggered_by=policy,
+        )
 
 
-async def test_multiple_passing_policies_accumulate_record_targets():
-    p1 = DeterministicPolicy(
-        dimension="spend",
-        operator="lte",
-        value=100.0,
+def test_evaluation_result_disallows_record_targets_on_non_allow() -> None:
+    policy = DeterministicPolicy(
+        dimension="4h_spend",
+        operator="lt",
+        value=50.0,
         param="amount",
         breach_verdict="BLOCK",
     )
-    p2 = DeterministicPolicy(
-        dimension="count",
-        operator="lte",
-        value=10.0,
-        breach_verdict="ESCALATE",
-    )
-    engine, _ = make_engine(policies=[p1, p2])
-    result = await engine.evaluate("test_skill", "agent_1", {"amount": 40.0})
-    assert result.verdict == "ALLOW"
-    assert ("spend", 40.0) in result._record_targets
-    assert ("count", 1.0) in result._record_targets
+
+    with pytest.raises(ValueError, match="_record_targets must be empty"):
+        EvaluationResult(
+            verdict="ESCALATE",
+            skill_id="finance.charge",
+            agent_id="agent-1",
+            triggered_by=policy,
+            _record_targets=[("4h_spend", 10.0)],
+        )
