@@ -30,6 +30,19 @@ class LocalAuditLogger:
           "triggered_by": null
         }
 
+    For set-operator DeterministicPolicy triggers, triggered_by emits
+    "values" (sorted list) instead of "value":
+        {
+          ...
+          "triggered_by": {
+            "type": "deterministic",
+            "dimension": "allowed_filepaths",
+            "operator": "in",
+            "values": ["/tmp", "/workspace"],
+            "breach_verdict": "BLOCK"
+          }
+        }
+
     Non-JSON-serialisable kwargs values are safely repr()-ed rather
     than raising — the audit log must never crash a skill call.
 
@@ -51,6 +64,18 @@ class LocalAuditLogger:
         if policy is None:
             return None
         if isinstance(policy, DeterministicPolicy):
+            if policy.values is not None:
+                # Set membership operator — emit 'values', not 'value'.
+                # sorted() ensures deterministic log output regardless of
+                # frozenset iteration order.
+                return {
+                    "type": "deterministic",
+                    "dimension": policy.dimension,
+                    "operator": policy.operator,
+                    "values": sorted(policy.values),
+                    "breach_verdict": policy.breach_verdict,
+                }
+            # Numeric operator — emit 'value' as before.
             return {
                 "type": "deterministic",
                 "dimension": policy.dimension,

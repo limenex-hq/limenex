@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Protocol, cast, get_args
 
 from .policy import (
-    _OPERATOR_FNS,
+    _NUMERIC_OPERATOR_FNS,
+    _SET_OPERATOR_FNS,
     AsyncPolicyStore,
     AsyncStateStore,
     DeterministicPolicy,
@@ -70,8 +71,9 @@ class LimenexConfigError(Exception):
 
     Distinct from UnregisteredSkillError (unknown skill_id) — this covers
     engine-level configuration errors: missing llm_evaluator for a
-    SemanticPolicy, param absent from kwargs, non-numeric param value, or
-    agent_id_param absent from decorated skill arguments.
+    SemanticPolicy, param absent from kwargs, non-numeric param value,
+    non-string param value for a set operator, or agent_id_param absent
+    from decorated skill arguments.
     """
 
 
@@ -125,7 +127,9 @@ class EvaluationResult:
         _record_targets: Internal list of (dimension, value) pairs to be
                          persisted by engine.record() after successful
                          execution. Always empty when verdict is not ALLOW.
-                         Underscore-prefixed — not part of the public contract.
+                         Set-operator policies never contribute to this list —
+                         they carry no state. Underscore-prefixed — not part
+                         of the public contract.
     """
 
     verdict: Verdict
@@ -166,9 +170,9 @@ class PolicyEngine:
                         Signature: fn(action_intent: str, rule: str) -> Verdict.
                         Sync and async callables are both supported.
                         Required only when policies include SemanticPolicy entries.
-        audit_logger:  Optional logger implementing the AuditLogger protocol.
-               Called after every evaluate(), regardless of verdict.
-               Audit failures never propagate to the skill call.
+        audit_logger:   Optional logger implementing the AuditLogger protocol.
+                        Called after every evaluate(), regardless of verdict.
+                        Audit failures never propagate to the skill call.
     """
 
     def __init__(
@@ -205,6 +209,11 @@ class PolicyEngine:
         Fetches PolicyConfig for skill_id, iterates the unified policy list
         in order, and short-circuits on the first non-ALLOW verdict.
 
+        For numeric DeterministicPolicy: reads and accumulates state via the
+        StateStore. For set-operator DeterministicPolicy: evaluates exact
+        string membership against policy.values — the StateStore is never
+        consulted and no state is recorded.
+
         Args:
             skill_id:  The registered skill identifier.
             agent_id:  The agent initiating the call, extracted by the decorator.
@@ -217,7 +226,9 @@ class PolicyEngine:
             UnregisteredSkillError:  skill_id not found in policy_store.
             LimenexConfigError:      SemanticPolicy present but llm_evaluator
                                      is None; declared param absent from kwargs;
-                                     or param value not castable to float.
+                                     param value not castable to float (numeric
+                                     operators); param value not a string (set
+                                     operators); or agent_id is empty.
         """
         if not skill_id:
             raise LimenexConfigError("skill_id must be a non-empty string.")
@@ -234,46 +245,86 @@ class PolicyEngine:
         for policy in config.policies:
 
             if isinstance(policy, DeterministicPolicy):
-                if policy.param is not None and policy.param not in kwargs:
-                    raise LimenexConfigError(
-                        f"DeterministicPolicy for skill '{skill_id}' declares "
-                        f"param='{policy.param}' but it was not found in kwargs. "
-                        f"Ensure the skill function accepts this argument."
-                    )
 
-                proposed: float | None = None
-                if policy.param is not None:
-                    try:
-                        proposed = float(kwargs[policy.param])
-                    except (TypeError, ValueError) as exc:
+                if policy.operator in _SET_OPERATOR_FNS:
+                    # ----------------------------------------------------------
+                    # Set membership path (in, not_in)
+                    # No state store interaction. No record_targets contribution.
+                    # ----------------------------------------------------------
+                    if policy.param not in kwargs:
+                        raise LimenexConfigError(
+                            f"DeterministicPolicy for skill '{skill_id}' uses a set "
+                            f"operator and declares param='{policy.param}' but it was "
+                            f"not found in kwargs. Ensure the skill function accepts "
+                            f"this argument."
+                        )
+                    param_value = kwargs[policy.param]
+                    if not isinstance(param_value, str):
+                        raise LimenexConfigError(
+                            f"DeterministicPolicy for skill '{skill_id}' uses a set "
+                            f"operator but param='{policy.param}' value "
+                            f"{param_value!r} is not a string. Set operators require "
+                            f"an exact string value for membership evaluation."
+                        )
+                    if not _SET_OPERATOR_FNS[policy.operator](
+                        param_value, policy.values
+                    ):
+                        return EvaluationResult(
+                            verdict=policy.breach_verdict,
+                            skill_id=skill_id,
+                            agent_id=agent_id,
+                            triggered_by=policy,
+                        )
+                    # Set operators never contribute to record_targets.
+
+                else:
+                    # ----------------------------------------------------------
+                    # Numeric path (lt, lte, gt, gte, eq, neq) — unchanged.
+                    # ----------------------------------------------------------
+                    if policy.param is not None and policy.param not in kwargs:
                         raise LimenexConfigError(
                             f"DeterministicPolicy for skill '{skill_id}' declares "
-                            f"param='{policy.param}' but its value "
-                            f"{kwargs[policy.param]!r} could not be cast to float."
-                        ) from exc
+                            f"param='{policy.param}' but it was not found in kwargs. "
+                            f"Ensure the skill function accepts this argument."
+                        )
 
-                if self._state_store_get_is_async:
-                    current = await cast(AsyncStateStore, self._state_store).get(
-                        agent_id, policy.dimension
+                    proposed: float | None = None
+                    if policy.param is not None:
+                        try:
+                            proposed = float(kwargs[policy.param])
+                        except (TypeError, ValueError) as exc:
+                            raise LimenexConfigError(
+                                f"DeterministicPolicy for skill '{skill_id}' declares "
+                                f"param='{policy.param}' but its value "
+                                f"{kwargs[policy.param]!r} could not be cast to float."
+                            ) from exc
+
+                    if self._state_store_get_is_async:
+                        current = await cast(AsyncStateStore, self._state_store).get(
+                            agent_id, policy.dimension
+                        )
+                    else:
+                        current = cast(StateStore, self._state_store).get(
+                            agent_id, policy.dimension
+                        )
+
+                    check_value = (
+                        (current + proposed) if proposed is not None else current
                     )
-                else:
-                    current = cast(StateStore, self._state_store).get(
-                        agent_id, policy.dimension
+
+                    if not _NUMERIC_OPERATOR_FNS[policy.operator](
+                        check_value, policy.value
+                    ):
+                        return EvaluationResult(
+                            verdict=policy.breach_verdict,
+                            skill_id=skill_id,
+                            agent_id=agent_id,
+                            triggered_by=policy,
+                        )
+
+                    record_targets.append(
+                        (policy.dimension, proposed if proposed is not None else 1.0)
                     )
-
-                check_value = (current + proposed) if proposed is not None else current
-
-                if not _OPERATOR_FNS[policy.operator](check_value, policy.value):
-                    return EvaluationResult(
-                        verdict=policy.breach_verdict,
-                        skill_id=skill_id,
-                        agent_id=agent_id,
-                        triggered_by=policy,
-                    )
-
-                record_targets.append(
-                    (policy.dimension, proposed if proposed is not None else 1.0)
-                )
 
             elif isinstance(policy, SemanticPolicy):
                 if self._llm_evaluator is None:
@@ -318,6 +369,9 @@ class PolicyEngine:
         Called by the decorator after successful skill execution. Never called
         on BLOCK or ESCALATE — the invariants on EvaluationResult enforce this
         structurally (_record_targets is always empty for non-ALLOW results).
+
+        Set-operator policies never contribute to _record_targets and are
+        therefore transparent to this method — no special handling required.
 
         Args:
             result: The EvaluationResult returned by evaluate().

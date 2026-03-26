@@ -11,6 +11,7 @@ from typing import Any
 import yaml
 
 from .policy import (
+    _SET_OPERATOR_FNS,
     DeterministicPolicy,
     PolicyConfig,
     SemanticPolicy,
@@ -39,6 +40,30 @@ class LocalFilePolicyStore:
 
     Raises UnregisteredSkillError for unknown skill_ids. Emits a warning
     for skills with an empty policies list.
+
+    YAML schema for deterministic policies:
+
+        Numeric operators (lt, lte, gt, gte, eq, neq):
+            - type: deterministic
+              dimension: <string>
+              operator: <lt|lte|gt|gte|eq|neq>
+              value: <number>
+              param: <string>          # optional
+              breach_verdict: <BLOCK|ESCALATE>
+
+        Set membership operators (in, not_in):
+            - type: deterministic
+              dimension: <string>
+              operator: <in|not_in>
+              values:
+                - <string>
+                - <string>
+              param: <string>          # required
+              breach_verdict: <BLOCK|ESCALATE>
+
+        'value' and 'values' are mutually exclusive and must match the
+        declared operator family. Providing the wrong field raises a
+        ValueError at load time.
 
     Args:
         path: Path to the primary (child) policies YAML file.
@@ -163,21 +188,8 @@ class LocalFilePolicyStore:
             policy_type = raw.get("type")
 
             if policy_type == "deterministic":
-                try:
-                    policies.append(
-                        DeterministicPolicy(
-                            dimension=raw["dimension"],
-                            operator=raw["operator"],
-                            value=float(raw["value"]),
-                            param=raw.get("param"),
-                            breach_verdict=raw["breach_verdict"],
-                        )
-                    )
-                except (KeyError, TypeError, ValueError) as exc:
-                    raise ValueError(
-                        f"Invalid deterministic policy at index {i} for skill '{skill_id}': {exc}. "
-                        f"Required fields: dimension, operator, value, breach_verdict."
-                    ) from exc
+                policies.append(self._deserialise_deterministic(skill_id, i, raw))
+
             elif policy_type == "semantic":
                 try:
                     policies.append(
@@ -191,6 +203,7 @@ class LocalFilePolicyStore:
                         f"Invalid semantic policy at index {i} for skill '{skill_id}': {exc}. "
                         f"Required fields: rule, verdict_ceiling."
                     ) from exc
+
             else:
                 raise ValueError(
                     f"Unknown policy type '{policy_type}' in skill '{skill_id}' "
@@ -198,3 +211,91 @@ class LocalFilePolicyStore:
                 )
 
         return PolicyConfig(policies=policies)
+
+    def _deserialise_deterministic(
+        self,
+        skill_id: str,
+        index: int,
+        raw: dict[str, Any],
+    ) -> DeterministicPolicy:
+        """Deserialise a single deterministic policy entry from raw YAML.
+
+        Branches on operator family:
+          - Set operators (in, not_in): expects 'values' list, no 'value'.
+          - Numeric operators (lt, lte, gt, gte, eq, neq): expects 'value'
+            float, no 'values'.
+
+        Raises ValueError with a clear message if the wrong field is
+        supplied for the declared operator, if required fields are absent,
+        or if 'values' is not a YAML list (guards against silent character-
+        iteration from frozenset(string)).
+
+        DeterministicPolicy.__post_init__ handles deeper validation
+        (frozenset type, string items, finite float, etc.).
+        """
+        try:
+            operator = raw["operator"]
+        except KeyError as exc:
+            raise ValueError(
+                f"Invalid deterministic policy at index {index} for skill "
+                f"'{skill_id}': missing required field 'operator'."
+            ) from exc
+
+        if operator in _SET_OPERATOR_FNS:
+            # Set membership path — requires 'values' list, forbids 'value'.
+            if "value" in raw:
+                raise ValueError(
+                    f"Invalid deterministic policy at index {index} for skill "
+                    f"'{skill_id}': set operator '{operator}' does not accept "
+                    f"'value'. Use 'values' (a YAML list of strings) instead."
+                )
+            raw_values = raw.get("values")
+            if not isinstance(raw_values, list):
+                raise ValueError(
+                    f"Invalid deterministic policy at index {index} for skill "
+                    f"'{skill_id}': 'values' must be a YAML list of strings, "
+                    f"got {type(raw_values).__name__!r}. "
+                    f"Use a YAML sequence:\n"
+                    f"  values:\n"
+                    f'    - "/path/one"\n'
+                    f'    - "/path/two"'
+                )
+            try:
+                return DeterministicPolicy(
+                    dimension=raw["dimension"],
+                    operator=operator,
+                    values=frozenset(raw_values),
+                    param=raw.get("param"),
+                    breach_verdict=raw["breach_verdict"],
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid deterministic policy at index {index} for skill "
+                    f"'{skill_id}': {exc}. "
+                    f"Set operator '{operator}' requires fields: "
+                    f"dimension, operator, values (list of strings), "
+                    f"param, breach_verdict."
+                ) from exc
+
+        else:
+            # Numeric path — requires 'value', forbids 'values'.
+            if "values" in raw:
+                raise ValueError(
+                    f"Invalid deterministic policy at index {index} for skill "
+                    f"'{skill_id}': numeric operator '{operator}' does not accept "
+                    f"'values'. Use 'value' (a single number) instead."
+                )
+            try:
+                return DeterministicPolicy(
+                    dimension=raw["dimension"],
+                    operator=operator,
+                    value=float(raw["value"]),
+                    param=raw.get("param"),
+                    breach_verdict=raw["breach_verdict"],
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Invalid deterministic policy at index {index} for skill "
+                    f"'{skill_id}': {exc}. "
+                    f"Required fields: dimension, operator, value, breach_verdict."
+                ) from exc
