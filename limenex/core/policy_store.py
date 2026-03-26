@@ -61,6 +61,10 @@ class LocalFilePolicyStore:
               param: <string>          # required
               breach_verdict: <BLOCK|ESCALATE>
 
+        Values are taken exactly as parsed from YAML — no trimming,
+        normalisation, or case folding is applied. Ensure values match
+        the exact runtime strings your skill will receive.
+
         'value' and 'values' are mutually exclusive and must match the
         declared operator family. Providing the wrong field raises a
         ValueError at load time.

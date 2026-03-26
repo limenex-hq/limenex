@@ -1,11 +1,31 @@
 """
-comms.py — Comms skills for Limenex.
+comms.py — Communications skills for Limenex.
 
-Governed execution functions for communications actions. Each skill is obtained
-via a factory that binds it to a PolicyEngine instance at application startup.
+Governed execution functions for outbound messaging actions. Each skill is
+obtained via a factory that binds it to a PolicyEngine instance at
+application startup.
 
 Skill IDs (reference these in .limenex/policies.yaml):
-    comms.send  —  send a message to a recipient via a channel
+    comms.send  —  send a message to a recipient over a channel
+
+Policy guidance:
+    String parameters (channel, recipient) now support exact-string
+    DeterministicPolicy checks using in/not_in operators. This enables
+    recipient blocklists, channel allowlists, and similar membership-based
+    controls without routing to SemanticPolicy.
+
+    Matching is exact and case-sensitive. Limenex does not parse, normalise,
+    or extract components from recipient addresses or channel identifiers
+    before comparison. A recipient policy targeting "alice@baddomain.com"
+    matches only that exact address — domain-level blocking (matching any
+    address at baddomain.com) requires SemanticPolicy or pre-processing the
+    recipient before calling the skill.
+
+    For content-based rules (e.g. "do not transmit PII"), use SemanticPolicy
+    targeting the text parameter. For structural matching such as domain-level
+    blocking, pre-process the value before calling the skill (e.g. extract the
+    domain from the recipient address) and use in/not_in on the extracted value.
+
 """
 
 from __future__ import annotations
@@ -49,51 +69,69 @@ def make_send(engine: PolicyEngine) -> Callable:
         text: str,
         executor: Callable[..., ReturnT],
     ) -> ReturnT:
-        """Governed skill: send a message to a recipient on behalf of an agent.
+        """Governed skill: send a message to a recipient over a channel.
 
-        Evaluates all policies registered under SEND_SKILL_ID before executing
-        the injected executor. The executor is never called on BLOCK or
-        ESCALATE verdicts.
+        Evaluates all policies registered under SEND_SKILL_ID before
+        executing the injected executor. The executor is never called on
+        BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
-            channel (str, dual-purpose): Serves as both a routing hint to the
-                executor (e.g. "slack", "email", "teams") and a governable
-                parameter. Cannot be used as DeterministicPolicy.param — string
-                values are not numeric. Use SemanticPolicy for channel-based
-                rules (e.g. "Do not send messages to external channels").
-            recipient (str): Cannot be used as DeterministicPolicy.param.
-                Use SemanticPolicy for recipient-based rules (e.g. "Do not
-                send messages to addresses outside the organisation domain").
-            text (str): Cannot be used as DeterministicPolicy.param.
-                Use SemanticPolicy for content-based rules (e.g. "Do not
-                send messages containing customer PII").
-            Message frequency/velocity: Use DeterministicPolicy without param
-                — non-projective count check (e.g. max N messages per hour).
+            recipient (str): Supports exact-string DeterministicPolicy checks
+                via in/not_in operators. Example: block sending to a known
+                set of bad actors using DeterministicPolicy(
+                    operator="not_in",
+                    values=frozenset({"alice@baddomain.com", "bob@baddomain.com"}),
+                    param="recipient",
+                    breach_verdict="BLOCK",
+                ).
+                Matching is exact and case-sensitive — "alice@baddomain.com"
+                does NOT match "baddomain.com" in the values set. For
+                domain-level blocking, extract the domain before calling the
+                skill (e.g. domain = recipient.split("@")[-1]) and pass the
+                extracted value as the governed parameter instead.
 
-        Governance timing: state is recorded after governance passes but before
-        the executor runs. Executor failure does not roll back recorded state —
-        governance tracks authorisation, not execution outcome.
+            channel (str): Supports exact-string DeterministicPolicy checks
+                via in/not_in operators. Example: restrict sending to approved
+                channels using DeterministicPolicy(
+                    operator="in",
+                    values=frozenset({"email", "slack"}),
+                    param="channel",
+                    breach_verdict="BLOCK",
+                ).
+                Matching is exact and case-sensitive.
+
+            text (str): Not a good fit for DeterministicPolicy. Use
+                SemanticPolicy for content-based rules (e.g. "do not
+                transmit PII or credentials in outbound messages").
+
+            frequency / count: Use a numeric DeterministicPolicy with
+                param=None to govern how often send is called
+                (e.g. daily outbound message count).
 
         Args:
-            agent_id: The agent initiating this send. Used by the engine
-                to resolve and record policy state.
-            channel: Delivery channel (e.g. "slack", "email", "teams").
-                Forwarded to the executor for routing; govern via SemanticPolicy
-                if channel-based rules are required.
-            recipient: Message recipient — channel address, email, or user ID
-                depending on the executor. Forwarded to the executor.
-                agent_id is never forwarded.
-            text: Message body. Forwarded to the executor.
-            executor: Developer-injected callable that performs the actual
-                message send. Receives (channel=channel, recipient=recipient,
-                text=text). Sync and async callables are both supported.
+            agent_id:   The agent initiating this send. Used by the engine
+                        to resolve and record policy state.
+            channel:    Delivery channel (e.g. "email", "slack", "sms").
+                        Supports exact-string in/not_in policy checks.
+                        Forwarded to the executor.
+            recipient:  Destination address or identifier
+                        (e.g. "alice@example.com", "ops-team"). Supports
+                        exact-string in/not_in policy checks. Forwarded to
+                        the executor. Matching is against the exact string
+                        as provided — no domain extraction is performed.
+            text:       Message body. Forwarded to the executor. Use
+                        SemanticPolicy for content-based governance.
+            executor:   Developer-injected callable that performs the actual
+                        message delivery. Receives (channel=channel,
+                        recipient=recipient, text=text). agent_id is never
+                        forwarded. Sync and async callables are both supported.
 
         Returns:
             Whatever the executor returns.
 
         Raises:
-            BlockedError: Policy verdict is BLOCK. Executor was not called.
-            EscalationRequired: Policy verdict is ESCALATE. Executor was not called.
+            BlockedError:        Policy verdict is BLOCK. Executor was not called.
+            EscalationRequired:  Policy verdict is ESCALATE. Executor was not called.
         """
         await _governed(
             agent_id=agent_id, channel=channel, recipient=recipient, text=text

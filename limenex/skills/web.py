@@ -1,14 +1,28 @@
 """
 web.py — Web skills for Limenex.
 
-Governed execution functions for outbound HTTP actions. Each skill is obtained
-via a factory that binds it to a PolicyEngine instance at application startup.
-
-http_get is intentionally excluded — read-only HTTP requests are too broad
-to attach a bounded policy to and fail the narrow-scope principle.
+Governed execution functions for outbound HTTP actions. Each skill is
+obtained via a factory that binds it to a PolicyEngine instance at
+application startup.
 
 Skill IDs (reference these in .limenex/policies.yaml):
-    web.post  —  perform an outbound HTTP POST request
+    web.post  —  send an HTTP POST request to a URL
+
+Policy guidance:
+    The url parameter now supports exact-string DeterministicPolicy checks
+    using in/not_in operators. This enables URL allowlists and blocklists
+    without routing to SemanticPolicy.
+
+    Matching is exact and case-sensitive. Limenex does not parse, normalise,
+    or canonicalise URLs before comparison. "https://api.example.com/v1/send"
+    and "https://api.example.com/v1/send/" are treated as distinct strings.
+    Scheme, host, path, and query string are all part of the comparison.
+    For host-only or prefix-based URL governance, extract the relevant
+    component before calling the skill (e.g. parse just the hostname) and
+    use in/not_in on the extracted value.
+
+    For rules about what may be sent in the payload (e.g. "do not transmit
+    PII externally"), use SemanticPolicy targeting the payload parameter.
 """
 
 from __future__ import annotations
@@ -28,7 +42,7 @@ POST_SKILL_ID: str = "web.post"
 
 
 def make_post(engine: PolicyEngine) -> Callable:
-    """Return a governed post skill bound to engine.
+    """Return a governed HTTP POST skill bound to engine.
 
     Call once at application startup. The returned callable is safe to reuse
     across concurrent async tasks — no shared mutable state.
@@ -51,45 +65,58 @@ def make_post(engine: PolicyEngine) -> Callable:
         payload: dict[str, Any],
         executor: Callable[..., ReturnT],
     ) -> ReturnT:
-        """Governed skill: perform an outbound HTTP POST request on behalf of an agent.
+        """Governed skill: send an HTTP POST request to a URL.
 
-        Evaluates all policies registered under POST_SKILL_ID before executing
-        the injected executor. The executor is never called on BLOCK or
-        ESCALATE verdicts.
+        Evaluates all policies registered under POST_SKILL_ID before
+        executing the injected executor. The executor is never called on
+        BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
-            url (str): Cannot be used as DeterministicPolicy.param — string
-                values are not numeric. Use SemanticPolicy for URL-based rules
-                (e.g. "Do not allow POST requests to external domains").
-            payload (dict): Cannot be used as DeterministicPolicy.param.
-                Use SemanticPolicy for payload-based rules (e.g. "Do not
-                send requests containing customer PII").
-            Request frequency/velocity: Use DeterministicPolicy without param
-                — non-projective count check (e.g. max N POST requests per hour).
+            url (str): Supports exact-string DeterministicPolicy checks via
+                in/not_in operators. Example: restrict outbound POSTs to an
+                approved URL allowlist using DeterministicPolicy(
+                    operator="in",
+                    values=frozenset({
+                        "https://api.example.com/v1/send",
+                        "https://api.example.com/v1/submit",
+                    }),
+                    param="url",
+                    breach_verdict="BLOCK",
+                ).
+                Matching is exact and case-sensitive. URLs are compared as
+                provided with no normalisation — trailing slashes, casing,
+                and query strings are all significant. For host-only or
+                prefix-based URL rules, extract the relevant component
+                before calling the skill (e.g. parse just the hostname)
+                and use in/not_in on the extracted value.
 
-        Governance timing: state is recorded after governance passes but before
-        the executor runs. Executor failure does not roll back recorded state —
-        governance tracks authorisation, not execution outcome.
+            payload (dict): Not a good fit for DeterministicPolicy. Use
+                SemanticPolicy for content-based rules (e.g. "do not
+                transmit PII or credentials in outbound requests").
+
+            frequency / count: Use a numeric DeterministicPolicy with
+                param=None to govern how often post is called
+                (e.g. daily outbound request count).
 
         Args:
-            agent_id: The agent initiating this request. Used by the engine
-                to resolve and record policy state.
-            url: The target URL. Forwarded to the executor; govern via
-                SemanticPolicy if URL-based rules are required.
-            payload: Request body as a dict. Serialisation to JSON or another
-                format is the executor's responsibility. Forwarded to the
-                executor; govern via SemanticPolicy if payload inspection
-                is required.
-            executor: Developer-injected callable that performs the actual HTTP
-                POST. Receives (url=url, payload=payload). agent_id is never
-                forwarded. Sync and async callables are both supported.
+            agent_id:  The agent initiating this POST. Used by the engine
+                       to resolve and record policy state.
+            url:       The target URL. Supports exact-string in/not_in
+                       policy checks. Compared as provided with no
+                       normalisation. Forwarded to the executor.
+            payload:   Request body as a dict. Forwarded to the executor.
+                       Use SemanticPolicy for content-based governance.
+            executor:  Developer-injected callable that performs the actual
+                       HTTP request. Receives (url=url, payload=payload).
+                       agent_id is never forwarded. Sync and async callables
+                       are both supported.
 
         Returns:
             Whatever the executor returns.
 
         Raises:
-            BlockedError: Policy verdict is BLOCK. Executor was not called.
-            EscalationRequired: Policy verdict is ESCALATE. Executor was not called.
+            BlockedError:        Policy verdict is BLOCK. Executor was not called.
+            EscalationRequired:  Policy verdict is ESCALATE. Executor was not called.
         """
         await _governed(agent_id=agent_id, url=url, payload=payload)
         if asyncio.iscoroutinefunction(executor):

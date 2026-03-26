@@ -1,14 +1,26 @@
 """
 filesystem.py — Filesystem skills for Limenex.
 
-Governed execution functions for filesystem actions. Each skill is obtained
-via a factory that binds it to a PolicyEngine instance at application startup.
-All skills use stdlib directly — no executor injection.
+Governed execution functions for local filesystem actions. Each skill is
+obtained via a factory that binds it to a PolicyEngine instance at
+application startup.
 
 Skill IDs (reference these in .limenex/policies.yaml):
-    filesystem.delete  —  delete a file
-    filesystem.write   —  write content to a file
-    filesystem.move    —  move or rename a file
+    filesystem.delete  —  delete a file or empty directory
+    filesystem.write   —  write text content to a file
+    filesystem.move    —  move or rename a file or directory
+
+Policy guidance:
+    String path parameters (filepath, src, dst) now support exact-string
+    DeterministicPolicy checks using in/not_in operators. This enables
+    path allowlists and blocklists without routing to SemanticPolicy.
+
+    Matching is exact and case-sensitive. Limenex does not normalise,
+    resolve, or canonicalise paths before comparison. For subtree or
+    prefix-based path governance, normalise or extract the relevant
+    path component before calling the skill and use in/not_in on the
+    extracted value.
+
 """
 
 from __future__ import annotations
@@ -36,6 +48,9 @@ MOVE_SKILL_ID: str = "filesystem.move"
 def make_delete(engine: PolicyEngine) -> Callable:
     """Return a governed delete skill bound to engine.
 
+    Call once at application startup. The returned callable is sync and safe
+    to reuse across calls.
+
     Args:
         engine: The PolicyEngine instance to bind this skill to.
 
@@ -46,43 +61,57 @@ def make_delete(engine: PolicyEngine) -> Callable:
 
     @engine.governed(DELETE_SKILL_ID, agent_id_param="agent_id")
     def delete(agent_id: str, filepath: str) -> None:
-        """Governed skill: delete a file on behalf of an agent.
+        """Governed skill: delete a file or empty directory.
 
         Evaluates all policies registered under DELETE_SKILL_ID before
-        performing the deletion. The file is never deleted on BLOCK or
-        ESCALATE verdicts.
+        executing the local filesystem action. The delete never occurs on
+        BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
-            filepath (str): Cannot be used as DeterministicPolicy.param —
-                string values are not numeric. Use SemanticPolicy for
-                path-based rules (e.g. "Do not allow deletion of files
-                outside /tmp/"). Use DeterministicPolicy for frequency
-                limits (e.g. max N deletions per hour — non-projective,
-                no param required).
+            filepath (str): Supports exact-string DeterministicPolicy checks
+                via in/not_in operators. Example: allow deletion only for
+                specific paths using DeterministicPolicy(
+                    operator="in",
+                    values=frozenset({"/tmp/allowed.txt"}),
+                    param="filepath",
+                ).
+                Matching is exact and case-sensitive; paths are compared as
+                provided. For subtree or prefix-based rules, extract or
+                normalise the relevant path component before calling the skill
+                and use in/not_in on the extracted value.
 
-        Governance timing: state is recorded after the operation completes.
-        If the filesystem operation raises, state is not advanced.
+            frequency / count: Use a numeric DeterministicPolicy with
+                param=None to govern how often delete is called
+                (e.g. daily delete count).
 
         Args:
-            agent_id: The agent initiating this deletion. Used by the engine
-                to resolve and record policy state.
-            filepath: Absolute or relative path to the file to delete.
-
-        Returns:
-            None
+            agent_id:  The agent initiating this delete. Used by the engine
+                       to resolve policy state.
+            filepath:  Path to delete. Supports exact-string in/not_in policy
+                       checks and is passed directly to the local filesystem
+                       operation with no canonicalisation by Limenex.
 
         Raises:
-            BlockedError: Policy verdict is BLOCK. File was not deleted.
-            EscalationRequired: Policy verdict is ESCALATE. File was not deleted.
-            FileNotFoundError: filepath does not exist.
+            BlockedError:        Policy verdict is BLOCK. No delete occurs.
+            EscalationRequired:  Policy verdict is ESCALATE. No delete occurs.
+            FileNotFoundError:   Path does not exist.
+            IsADirectoryError:   Path is a non-empty directory.
+            PermissionError:     OS denies deletion.
         """
-        Path(filepath).unlink()
+        path = Path(filepath)
+        if path.is_dir():
+            path.rmdir()
+        else:
+            path.unlink()
 
     return delete
 
 
 def make_write(engine: PolicyEngine) -> Callable:
     """Return a governed write skill bound to engine.
+
+    Call once at application startup. The returned callable is sync and safe
+    to reuse across calls.
 
     Args:
         engine: The PolicyEngine instance to bind this skill to.
@@ -94,41 +123,45 @@ def make_write(engine: PolicyEngine) -> Callable:
 
     @engine.governed(WRITE_SKILL_ID, agent_id_param="agent_id")
     def write(agent_id: str, filepath: str, content: str) -> None:
-        """Governed skill: write content to a file on behalf of an agent.
+        """Governed skill: write text content to a file.
 
         Evaluates all policies registered under WRITE_SKILL_ID before
-        performing the write. The file is never written on BLOCK or
-        ESCALATE verdicts.
+        executing the local filesystem action. The write never occurs on
+        BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
-            filepath (str): Cannot be used as DeterministicPolicy.param —
-                string values are not numeric. Path-based governance (e.g.
-                "Do not allow writes outside the project directory") must
-                use SemanticPolicy.
-            content (str): Cannot be used as DeterministicPolicy.param.
-                Content-based governance (e.g. "Do not write files containing
-                credentials") must use SemanticPolicy.
-            Frequency/volume limits (e.g. max N writes per hour): Use
-                DeterministicPolicy without param — non-projective count check.
+            filepath (str): Supports exact-string DeterministicPolicy checks
+                via in/not_in operators. Example: restrict writes to an
+                approved path allowlist using DeterministicPolicy(
+                    operator="in",
+                    values=frozenset({"/workspace/output.txt"}),
+                    param="filepath",
+                ).
+                Matching is exact and case-sensitive; paths are compared as
+                provided. For subtree or prefix-based rules, extract or
+                normalise the relevant path component before calling the skill
+                and use in/not_in on the extracted value.
 
-        Governance timing: state is recorded after the operation completes.
-        If the filesystem operation raises, state is not advanced.
+            content (str): Not a good fit for DeterministicPolicy. Use
+                SemanticPolicy for rules about what may be written.
+
+            frequency / count: Use a numeric DeterministicPolicy with
+                param=None to govern how often write is called
+                (e.g. daily write count).
 
         Args:
-            agent_id: The agent initiating this write. Used by the engine
-                to resolve and record policy state.
-            filepath: Absolute or relative path to the file to write.
-                Created if it does not exist; overwritten if it does.
-            content: UTF-8 string content to write to the file.
-
-        Returns:
-            None
+            agent_id:  The agent initiating this write. Used by the engine
+                       to resolve policy state.
+            filepath:  Path to write. Supports exact-string in/not_in policy
+                       checks and is passed directly to the local filesystem
+                       operation with no canonicalisation by Limenex.
+            content:   Text content to write. Forwarded directly to the file.
 
         Raises:
-            BlockedError: Policy verdict is BLOCK. File was not written.
-            EscalationRequired: Policy verdict is ESCALATE. File was not written.
-            OSError: filepath is not writable or the parent directory
-                does not exist.
+            BlockedError:        Policy verdict is BLOCK. No write occurs.
+            EscalationRequired:  Policy verdict is ESCALATE. No write occurs.
+            FileNotFoundError:   Parent directory does not exist.
+            PermissionError:     OS denies writing.
         """
         Path(filepath).write_text(content, encoding="utf-8")
 
@@ -137,6 +170,9 @@ def make_write(engine: PolicyEngine) -> Callable:
 
 def make_move(engine: PolicyEngine) -> Callable:
     """Return a governed move skill bound to engine.
+
+    Call once at application startup. The returned callable is sync and safe
+    to reuse across calls.
 
     Args:
         engine: The PolicyEngine instance to bind this skill to.
@@ -148,40 +184,38 @@ def make_move(engine: PolicyEngine) -> Callable:
 
     @engine.governed(MOVE_SKILL_ID, agent_id_param="agent_id")
     def move(agent_id: str, src: str, dst: str) -> None:
-        """Governed skill: move or rename a file on behalf of an agent.
+        """Governed skill: move or rename a file or directory.
 
         Evaluates all policies registered under MOVE_SKILL_ID before
-        performing the move. The file is never moved on BLOCK or
-        ESCALATE verdicts.
+        executing the local filesystem action. The move never occurs on
+        BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
-            src (str): Cannot be used as DeterministicPolicy.param — string
-                values are not numeric. Use SemanticPolicy for path-based
-                rules (e.g. "Do not allow moves out of the working directory").
-            dst (str): Same constraint as src.
-            Frequency limits: Use DeterministicPolicy without param —
-                non-projective count check.
+            src (str), dst (str): Both parameters support exact-string
+                DeterministicPolicy checks via in/not_in operators. Example:
+                allow moves only from a known source set by targeting
+                param="src", or block moves into sensitive destinations by
+                targeting param="dst". Matching is exact and case-sensitive;
+                paths are compared as provided. For subtree or prefix-based
+                rules, extract or normalise the relevant path component before
+                calling the skill and use in/not_in on the extracted value.
 
-        Governance timing: state is recorded after the operation completes.
-        If the filesystem operation raises, state is not advanced.
+            frequency / count: Use a numeric DeterministicPolicy with
+                param=None to govern how often move is called.
 
         Args:
-            agent_id: The agent initiating this move. Used by the engine
-                to resolve and record policy state.
-            src: Path to the source file.
-            dst: Destination path. If dst is a directory, the file is moved
-                into it preserving the filename.
-
-        Returns:
-            None
+            agent_id:  The agent initiating this move. Used by the engine
+                       to resolve policy state.
+            src:       Source path. Supports exact-string in/not_in policy
+                       checks and is passed directly to shutil.move.
+            dst:       Destination path. Supports exact-string in/not_in
+                       policy checks and is passed directly to shutil.move.
 
         Raises:
-            BlockedError: Policy verdict is BLOCK. File was not moved.
-            EscalationRequired: Policy verdict is ESCALATE. File was not moved.
-            FileNotFoundError: src does not exist.
-            shutil.Error: The move operation fails (e.g. src and dst resolve to
-            the same path).
-
+            BlockedError:        Policy verdict is BLOCK. No move occurs.
+            EscalationRequired:  Policy verdict is ESCALATE. No move occurs.
+            FileNotFoundError:   Source path does not exist.
+            PermissionError:     OS denies the move.
         """
         shutil.move(src, dst)
 
