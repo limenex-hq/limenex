@@ -51,25 +51,50 @@ _VALID_BREACH_VERDICTS: frozenset[str] = frozenset(get_args(BreachVerdict))
 # Operator
 # ---------------------------------------------------------------------------
 
-Operator = Literal["lt", "lte", "gt", "gte", "eq", "neq"]
+Operator = Literal["lt", "lte", "gt", "gte", "eq", "neq", "in", "not_in"]
 
 # Private — used internally by engine.py only.
-_OPERATOR_FNS: MappingProxyType[str, Callable[[float, float], bool]] = MappingProxyType(
-    {
-        "lt": lambda current, val: current < val,
-        "lte": lambda current, val: current <= val,
-        "gt": lambda current, val: current > val,
-        "gte": lambda current, val: current >= val,
-        "eq": lambda current, val: current == val,
-        "neq": lambda current, val: current != val,
-    }
+_NUMERIC_OPERATOR_FNS: MappingProxyType[str, Callable[[float, float], bool]] = (
+    MappingProxyType(
+        {
+            "lt": lambda current, val: current < val,
+            "lte": lambda current, val: current <= val,
+            "gt": lambda current, val: current > val,
+            "gte": lambda current, val: current >= val,
+            "eq": lambda current, val: current == val,
+            "neq": lambda current, val: current != val,
+        }
+    )
 )
 
-if set(get_args(Operator)) != set(_OPERATOR_FNS.keys()):
-    raise RuntimeError(
-        "Operator Literal and _OPERATOR_FNS keys are out of sync. "
-        "Update both together when adding or removing operators."
+_SET_OPERATOR_FNS: MappingProxyType[str, Callable[[str, frozenset[str]], bool]] = (
+    MappingProxyType(
+        {
+            "in": lambda val, allowed: val in allowed,
+            "not_in": lambda val, excluded: val not in excluded,
+        }
     )
+)
+
+if set(get_args(Operator)) != (
+    set(_NUMERIC_OPERATOR_FNS.keys()) | set(_SET_OPERATOR_FNS.keys())
+):
+    raise RuntimeError(
+        "Operator Literal and operator function maps are out of sync. "
+        "Update _NUMERIC_OPERATOR_FNS, _SET_OPERATOR_FNS, and the Operator "
+        "Literal together when adding or removing operators."
+    )
+
+if not set(_NUMERIC_OPERATOR_FNS.keys()).isdisjoint(set(_SET_OPERATOR_FNS.keys())):
+    raise RuntimeError(
+        "_NUMERIC_OPERATOR_FNS and _SET_OPERATOR_FNS share overlapping keys. "
+        "Operator names must be unique across both maps."
+    )
+
+# Module-level constant — computed once after guards confirm correctness.
+_ALL_OPERATORS: frozenset[str] = frozenset(
+    _NUMERIC_OPERATOR_FNS.keys() | _SET_OPERATOR_FNS.keys()
+)
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -97,26 +122,57 @@ class UnregisteredSkillError(Exception):
 class DeterministicPolicy:
     """A serializable, rule-based governance constraint.
 
-    Evaluates a state dimension from the StateStore against an operator +
-    value condition. Returns breach_verdict if the condition is not satisfied.
+    Supports two operator families:
 
-    Projective check: when param is set, the engine evaluates
-    (current_value + proposed_value) where proposed_value is extracted from
-    the named function argument. The same value is passed to StateStore.record()
-    after successful execution. When param is None, the check is non-projective
-    and StateStore.record() is called with value=1.0 (count increment).
+    **Numeric operators** (lt, lte, gt, gte, eq, neq):
+        Evaluates a state dimension from the StateStore against a numeric
+        threshold. `value` is required; `values` must be None.
 
-    eq/neq use exact float comparison — only use with integer-equivalent
-    values (e.g. 1.0, 0.0). Use lt/lte/gt/gte for fractional thresholds.
+        Projective check: when `param` is set, the engine evaluates
+        (current_value + proposed_value) where proposed_value is extracted
+        from the named function argument. The same value is passed to
+        StateStore.record() after successful execution. When `param` is None,
+        the check is non-projective and StateStore.record() is called with
+        value=1.0 (count increment).
+
+        eq/neq use exact float comparison — only use with integer-equivalent
+        values (e.g. 1.0, 0.0). Use lt/lte/gt/gte for fractional thresholds.
+
+    **Set membership operators** (in, not_in):
+        Evaluates whether kwargs[param] is a member of the defined string set.
+        `values` is required; `value` must be None; `param` is mandatory.
+
+        Matching is exact and case-sensitive: "/Workspace" is NOT considered
+        in {"/workspace", "/tmp"}. Domain or suffix extraction is out of scope
+        for this operator — use exact full strings (e.g. full email addresses,
+        full file paths, full URLs).
+
+        `dimension` acts as a human-readable label only for set-operator
+        policies. The StateStore is never read or written — there is no state
+        accumulation for set membership checks.
+
+        Empty set behaviour is deterministic:
+            in     frozenset() → always breaches (nothing satisfies membership)
+            not_in frozenset() → always passes (nothing to exclude)
+        Both are almost certainly misconfigurations; a LimenexConfigWarning
+        is emitted at construction time when `values` is empty.
 
     Args:
-        dimension:      StateStore key to query. User-defined, any string is valid.
-        operator:       One of: "lt", "lte", "gt", "gte", "eq", "neq".
-        value:          Finite threshold to compare against.
-        param:          Function argument name mapping to this dimension.
-                        None for count-based (non-projective) checks.
+        dimension:      StateStore key (numeric operators) or human-readable
+                        label (set operators). User-defined, any string is valid.
+        operator:       One of: "lt", "lte", "gt", "gte", "eq", "neq",
+                        "in", "not_in".
+        value:          Finite numeric threshold. Required for numeric operators;
+                        must be None for set operators.
+        param:          Function argument name mapped to this dimension.
+                        Required for set operators (hard error if absent).
+                        Optional (None) for count-based numeric checks.
         breach_verdict: Verdict when condition is not satisfied.
                         Must be "BLOCK" or "ESCALATE". Default: "ESCALATE".
+        values:         Frozenset of exact strings for membership evaluation.
+                        Required for set operators; must be None for numeric
+                        operators. Must be a frozenset — lists and mutable sets
+                        are rejected at construction time.
 
     Examples:
         DeterministicPolicy(                      # projective spend check
@@ -128,46 +184,120 @@ class DeterministicPolicy:
             dimension="daily_api_calls",
             operator="lt", value=100,
         )
-        DeterministicPolicy(                      # approval gate
-            dimension="top_up_aws_approved",
-            operator="eq", value=1.0,
+        DeterministicPolicy(                      # path allowlist
+            dimension="allowed_filepaths",
+            operator="in",
+            values=frozenset({"/workspace", "/tmp"}),
+            param="filepath",
+            breach_verdict="BLOCK",
+        )
+        DeterministicPolicy(                      # recipient blocklist
+            dimension="blocked_recipients",
+            operator="not_in",
+            values=frozenset({"alice@baddomain.com", "bob@baddomain.com"}),
+            param="recipient",
+            breach_verdict="BLOCK",
         )
     """
 
     dimension: str
     operator: Operator
-    value: float
+    value: float | None = None
     param: str | None = None
     breach_verdict: BreachVerdict = "ESCALATE"
+    values: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
+        # --- dimension ---
         self.dimension = self.dimension.strip()
         if not self.dimension:
             raise ValueError("dimension must be a non-empty string.")
-        if self.operator not in _OPERATOR_FNS:
+
+        # --- operator ---
+        if self.operator not in _ALL_OPERATORS:
             raise ValueError(
                 f"Invalid operator '{self.operator}'. "
-                f"Must be one of: {list(_OPERATOR_FNS.keys())}."
+                f"Must be one of: {sorted(_ALL_OPERATORS)}."
             )
-        if not math.isfinite(self.value):
-            raise ValueError(f"value must be a finite number, got {self.value!r}.")
+
+        # --- breach_verdict ---
         if self.breach_verdict not in _VALID_BREACH_VERDICTS:
             raise ValueError(
                 f"Invalid breach_verdict '{self.breach_verdict}'. "
                 f"Must be one of: {sorted(_VALID_BREACH_VERDICTS)}."
             )
+
+        # --- param (strip and validate if provided; set operators enforce
+        #     presence in the family-specific block below) ---
         if self.param is not None:
             self.param = self.param.strip()
             if not self.param:
                 raise ValueError("param must be a non-empty string or None.")
-        if self.operator in ("eq", "neq") and self.value != math.floor(self.value):
-            warnings.warn(
-                f"operator '{self.operator}' uses exact float comparison. "
-                f"Non-integer value {self.value!r} may be unreliable. "
-                f"Use lt/lte/gt/gte for fractional thresholds.",
-                LimenexConfigWarning,
-                stacklevel=3,
-            )
+
+        # --- operator-family-specific validation ---
+        if self.operator in _NUMERIC_OPERATOR_FNS:
+            # Numeric branch
+            if self.values is not None:
+                raise ValueError(
+                    f"Numeric operator '{self.operator}' does not accept 'values'. "
+                    f"Provide 'value' (a finite float) and leave 'values' as None."
+                )
+            if self.value is None:
+                raise ValueError(
+                    f"Numeric operator '{self.operator}' requires 'value' to be a "
+                    f"finite float. Got None."
+                )
+            if not math.isfinite(self.value):
+                raise ValueError(f"value must be a finite number, got {self.value!r}.")
+            # Preserve existing eq/neq fractional-float warning
+            if self.operator in ("eq", "neq") and self.value != math.floor(self.value):
+                warnings.warn(
+                    f"operator '{self.operator}' uses exact float comparison. "
+                    f"Non-integer value {self.value!r} may be unreliable. "
+                    f"Use lt/lte/gt/gte for fractional thresholds.",
+                    LimenexConfigWarning,
+                    stacklevel=3,
+                )
+
+        else:
+            # Set membership branch (in, not_in)
+            if self.value is not None:
+                raise ValueError(
+                    f"Set operator '{self.operator}' does not accept 'value'. "
+                    f"Provide 'values' (a frozenset of strings) and leave 'value' as None."
+                )
+            if self.param is None:
+                raise ValueError(
+                    f"Set operator '{self.operator}' requires 'param' to be set. "
+                    f"'param' identifies the skill argument to evaluate against 'values'."
+                )
+            if self.values is None:
+                raise ValueError(
+                    f"Set operator '{self.operator}' requires 'values' to be a "
+                    f"frozenset of strings. Got None."
+                )
+            if not isinstance(self.values, frozenset):
+                raise TypeError(
+                    f"Set operator '{self.operator}' requires 'values' to be a frozenset. "
+                    f"Got {type(self.values).__name__!r}. Wrap your values: "
+                    f"frozenset({{...}}) or frozenset(your_iterable)."
+                )
+            if not all(isinstance(v, str) for v in self.values):
+                non_strings = [v for v in self.values if not isinstance(v, str)]
+                raise ValueError(
+                    f"All items in 'values' must be strings. "
+                    f"Got non-string items: {non_strings!r}."
+                )
+            if len(self.values) == 0:
+                warnings.warn(
+                    f"DeterministicPolicy for dimension '{self.dimension}' has an "
+                    f"empty 'values' set with operator '{self.operator}'. "
+                    f"'in' with an empty set always breaches; "
+                    f"'not_in' with an empty set always passes. "
+                    f"This is almost certainly a misconfiguration.",
+                    LimenexConfigWarning,
+                    stacklevel=3,
+                )
 
 
 # ---------------------------------------------------------------------------
