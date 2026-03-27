@@ -12,6 +12,7 @@ from limenex.skills._types rather than from this module.
 
 from __future__ import annotations
 
+from limenex.skills._exceptions import UnregisteredExecutorError
 from limenex.skills.comms import SEND_SKILL_ID, make_send
 from limenex.skills.filesystem import (
     DELETE_SKILL_ID,
@@ -30,6 +31,8 @@ from limenex.skills.finance import (
 from limenex.skills.web import POST_SKILL_ID, make_post
 
 __all__ = [
+    # Exceptions
+    "UnregisteredExecutorError",
     # Finance
     "CHARGE_SKILL_ID",
     "SPEND_SKILL_ID",
