@@ -6,20 +6,18 @@ obtained via a factory that binds it to a PolicyEngine instance at
 application startup.
 
 Skill IDs (reference these in .limenex/policies.yaml):
-    web.post — send an HTTP POST request to a URL
+    web.post — send an HTTP POST request to a named destination
 
 Policy guidance:
-    The url parameter supports exact-string DeterministicPolicy checks
-    using in/not_in operators. This enables URL allowlists and blocklists
-    without routing to SemanticPolicy.
+    The destination parameter supports exact-string DeterministicPolicy
+    checks using in/not_in operators. This enables destination allowlists
+    and blocklists without routing to SemanticPolicy.
 
-    Matching is exact and case-sensitive. Limenex does not parse, normalise,
-    or canonicalise URLs before comparison. "https://api.example.com/v1/send"
-    and "https://api.example.com/v1/send/" are treated as distinct strings.
-    Scheme, host, path, and query string are all part of the comparison.
-    For host-only or prefix-based URL governance, extract the relevant
-    component before calling the skill (e.g. parse just the hostname) and
-    use in/not_in on the extracted value.
+    Matching is exact and case-sensitive. The destination string is a
+    developer-defined key (e.g. "ibkr", "yahoo") that maps to an executor
+    in the registry supplied at factory time. The actual URL is an internal
+    concern of the executor — it is never exposed to the agent or the
+    governance layer.
 
     For rules about what may be sent in the payload (e.g. "do not transmit
     PII externally"), use SemanticPolicy targeting the payload parameter.
@@ -31,6 +29,7 @@ import asyncio
 from typing import Any, Callable
 
 from limenex.core.engine import PolicyEngine
+from limenex.skills._exceptions import UnregisteredExecutorError
 from limenex.skills._types import ReturnT
 
 __all__ = [
@@ -41,7 +40,7 @@ __all__ = [
 POST_SKILL_ID: str = "web.post"
 
 
-def make_post(engine: PolicyEngine, executor: Callable[..., ReturnT]) -> Callable:
+def make_post(engine: PolicyEngine, registry: dict[str, Callable]) -> Callable:
     """Return a governed HTTP POST skill bound to engine.
 
     Call once at application startup. The returned callable is safe to reuse
@@ -49,49 +48,50 @@ def make_post(engine: PolicyEngine, executor: Callable[..., ReturnT]) -> Callabl
 
     Args:
         engine:   The PolicyEngine instance to bind this skill to.
-        executor: The HTTP client callable that performs the actual POST
-                  request. Receives (url=url, payload=payload). agent_id
-                  is never forwarded. Sync and async callables are both
-                  supported.
+        registry: Mapping of destination name to executor callable.
+                  Keys must match the destination strings the agent will pass
+                  at call time (e.g. {"ibkr": post_to_ibkr,
+                  "yahoo": post_to_yahoo}).
+                  Executors receive (payload=payload). agent_id and
+                  destination are never forwarded. The target URL is an
+                  internal concern of each executor.
+                  Sync and async callables are both supported.
 
     Returns:
         An async callable with signature:
-        post(agent_id, url, payload) -> ReturnT
+        post(agent_id, destination, payload) -> ReturnT
     """
 
     @engine.governed(POST_SKILL_ID, agent_id_param="agent_id")
-    async def _governed(agent_id: str, url: str, payload: dict[str, Any]) -> None:
+    async def _governed(
+        agent_id: str, destination: str, payload: dict[str, Any]
+    ) -> None:
         pass
 
     async def post(
         agent_id: str,
-        url: str,
+        destination: str,
         payload: dict[str, Any],
     ) -> ReturnT:
-        """Governed skill: send an HTTP POST request to a URL.
+        """Governed skill: send an HTTP POST request to a named destination.
 
         Evaluates all policies registered under POST_SKILL_ID before
-        dispatching to the executor supplied at factory time. The executor
+        dispatching to the executor registered for destination. The executor
         is never called on BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
-            url (str): Supports exact-string DeterministicPolicy checks via
-                in/not_in operators. Example: restrict outbound POSTs to an
-                approved URL allowlist using DeterministicPolicy(
+            destination (str): Supports exact-string DeterministicPolicy
+                checks via in/not_in operators. Example: restrict outbound
+                POSTs to an approved destination allowlist using
+                DeterministicPolicy(
                     operator="in",
-                    values=frozenset({
-                        "https://api.example.com/v1/send",
-                        "https://api.example.com/v1/submit",
-                    }),
-                    param="url",
+                    values=frozenset({"ibkr", "yahoo"}),
+                    param="destination",
                     breach_verdict="BLOCK",
                 ).
-                Matching is exact and case-sensitive. URLs are compared as
-                provided with no normalisation — trailing slashes, casing,
-                and query strings are all significant. For host-only or
-                prefix-based URL rules, extract the relevant component
-                before calling the skill (e.g. parse just the hostname)
-                and use in/not_in on the extracted value.
+                Matching is exact and case-sensitive. The destination key
+                is developer-defined — the actual URL is owned by the
+                executor and never appears in the governance surface.
 
             payload (dict): Not a good fit for DeterministicPolicy. Use
                 SemanticPolicy for content-based rules (e.g. "do not
@@ -106,24 +106,32 @@ def make_post(engine: PolicyEngine, executor: Callable[..., ReturnT]) -> Callabl
         governance tracks authorisation, not execution outcome.
 
         Args:
-            agent_id:  The agent initiating this POST. Used by the engine
-                       to resolve and record policy state.
-            url:       The target URL. Supports exact-string in/not_in
-                       policy checks. Compared as provided with no
-                       normalisation. Forwarded to the executor.
-            payload:   Request body as a dict. Forwarded to the executor.
-                       Use SemanticPolicy for content-based governance.
+            agent_id:     The agent initiating this POST. Used by the engine
+                          to resolve and record policy state.
+            destination:  Named target (e.g. "ibkr", "yahoo"). Must match a
+                          key in the registry supplied to make_post. Supports
+                          exact-string in/not_in policy checks. Never
+                          forwarded to the executor.
+            payload:      Request body as a dict. Forwarded to the executor.
+                          Use SemanticPolicy for content-based governance.
 
         Returns:
             Whatever the executor returns.
 
         Raises:
-            BlockedError:        Policy verdict is BLOCK. Executor was not called.
-            EscalationRequired:  Policy verdict is ESCALATE. Executor was not called.
+            UnregisteredExecutorError: destination has no entry in the
+                                       registry supplied to make_post.
+                                       Executor was not called and no state
+                                       was recorded.
+            BlockedError:              Policy verdict is BLOCK. Executor was not called.
+            EscalationRequired:        Policy verdict is ESCALATE. Executor was not called.
         """
-        await _governed(agent_id=agent_id, url=url, payload=payload)
+        if destination not in registry:
+            raise UnregisteredExecutorError(POST_SKILL_ID, destination)
+        executor = registry[destination]
+        await _governed(agent_id=agent_id, destination=destination, payload=payload)
         if asyncio.iscoroutinefunction(executor):
-            return await executor(url=url, payload=payload)
-        return executor(url=url, payload=payload)
+            return await executor(payload=payload)
+        return executor(payload=payload)
 
     return post

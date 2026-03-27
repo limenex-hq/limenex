@@ -748,6 +748,10 @@ async def test_comms_send_executor_not_in_engine_kwargs() -> None:
 
 # ---------------------------------------------------------------------------
 # Web skills
+# NOTE: URL-string governance (DeterministicPolicy param="url") has been
+# replaced by named-destination governance (param="destination"). This is a
+# deliberate feature replacement — destination allowlists are strictly cleaner
+# than URL string matching. The old URL allowlist tests are removed accordingly.
 # ---------------------------------------------------------------------------
 
 
@@ -757,10 +761,10 @@ async def test_web_post_allow_calls_async_executor() -> None:
             "web.post": PolicyConfig(
                 policies=[
                     DeterministicPolicy(
-                        dimension="approved_urls",
+                        dimension="approved_destinations",
                         operator="in",
-                        values=frozenset({"https://api.example.com/v1/send"}),
-                        param="url",
+                        values=frozenset({"ibkr", "yahoo"}),
+                        param="destination",
                         breach_verdict="BLOCK",
                     )
                 ]
@@ -768,19 +772,16 @@ async def test_web_post_allow_calls_async_executor() -> None:
         }
     )
     executor = AsyncMock(return_value={"status": "ok"})
-    post = make_post(engine, executor=executor)
+    post = make_post(engine, registry={"ibkr": executor})
 
     result = await post(
         agent_id="agent-1",
-        url="https://api.example.com/v1/send",
+        destination="ibkr",
         payload={"hello": "world"},
     )
 
     assert result == {"status": "ok"}
-    executor.assert_awaited_once_with(
-        url="https://api.example.com/v1/send",
-        payload={"hello": "world"},
-    )
+    executor.assert_awaited_once_with(payload={"hello": "world"})
 
 
 async def test_web_post_allow_calls_sync_executor() -> None:
@@ -789,10 +790,10 @@ async def test_web_post_allow_calls_sync_executor() -> None:
             "web.post": PolicyConfig(
                 policies=[
                     DeterministicPolicy(
-                        dimension="approved_urls",
+                        dimension="approved_destinations",
                         operator="in",
-                        values=frozenset({"https://api.example.com/v1/send"}),
-                        param="url",
+                        values=frozenset({"ibkr", "yahoo"}),
+                        param="destination",
                         breach_verdict="BLOCK",
                     )
                 ]
@@ -800,33 +801,28 @@ async def test_web_post_allow_calls_sync_executor() -> None:
         }
     )
     executor = Mock(return_value={"status": "ok"})
-    post = make_post(engine, executor=executor)
+    post = make_post(engine, registry={"ibkr": executor})
 
     result = await post(
         agent_id="agent-1",
-        url="https://api.example.com/v1/send",
+        destination="ibkr",
         payload={"hello": "world"},
     )
 
     assert result == {"status": "ok"}
-    executor.assert_called_once_with(
-        url="https://api.example.com/v1/send",
-        payload={"hello": "world"},
-    )
+    executor.assert_called_once_with(payload={"hello": "world"})
 
 
-async def test_web_post_url_allowlist_blocks_unapproved_url_and_never_calls_executor() -> (
-    None
-):
+async def test_web_post_destination_allowlist_blocks_unapproved_destination() -> None:
     engine = make_engine(
         {
             "web.post": PolicyConfig(
                 policies=[
                     DeterministicPolicy(
-                        dimension="approved_urls",
+                        dimension="approved_destinations",
                         operator="in",
-                        values=frozenset({"https://api.example.com/v1/send"}),
-                        param="url",
+                        values=frozenset({"ibkr", "yahoo"}),
+                        param="destination",
                         breach_verdict="BLOCK",
                     )
                 ]
@@ -834,12 +830,12 @@ async def test_web_post_url_allowlist_blocks_unapproved_url_and_never_calls_exec
         }
     )
     executor = AsyncMock()
-    post = make_post(engine, executor=executor)
+    post = make_post(engine, registry={"ibkr": executor, "evil": executor})
 
     with pytest.raises(BlockedError):
         await post(
             agent_id="agent-1",
-            url="https://evil.example.com/collect",
+            destination="evil",
             payload={"hello": "world"},
         )
 
@@ -852,10 +848,10 @@ async def test_web_post_escalate_does_not_call_executor() -> None:
             "web.post": PolicyConfig(
                 policies=[
                     DeterministicPolicy(
-                        dimension="approved_urls",
+                        dimension="approved_destinations",
                         operator="in",
-                        values=frozenset({"https://api.example.com/v1/send"}),
-                        param="url",
+                        values=frozenset({"ibkr", "yahoo"}),
+                        param="destination",
                         breach_verdict="ESCALATE",
                     )
                 ]
@@ -863,16 +859,50 @@ async def test_web_post_escalate_does_not_call_executor() -> None:
         }
     )
     executor = AsyncMock()
-    post = make_post(engine, executor=executor)
+    post = make_post(engine, registry={"ibkr": executor, "evil": executor})
 
     with pytest.raises(EscalationRequired):
         await post(
             agent_id="agent-1",
-            url="https://evil.example.com/collect",
+            destination="evil",
             payload={"hello": "world"},
         )
 
     executor.assert_not_called()
+
+
+async def test_web_post_unregistered_destination_raises_before_governance() -> None:
+    state_store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "web.post": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="approved_destinations",
+                            operator="in",
+                            values=frozenset({"ibkr", "yahoo"}),
+                            param="destination",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=state_store,
+    )
+    post = make_post(engine, registry={"ibkr": AsyncMock()})
+
+    with pytest.raises(UnregisteredExecutorError) as exc_info:
+        await post(
+            agent_id="agent-1",
+            destination="yahoo",
+            payload={"hello": "world"},
+        )
+
+    assert exc_info.value.skill_id == "web.post"
+    assert exc_info.value.key == "yahoo"
+    assert state_store.record_calls == []
 
 
 async def test_web_post_executor_not_in_engine_kwargs() -> None:
@@ -881,10 +911,10 @@ async def test_web_post_executor_not_in_engine_kwargs() -> None:
             "web.post": PolicyConfig(
                 policies=[
                     DeterministicPolicy(
-                        dimension="approved_urls",
+                        dimension="approved_destinations",
                         operator="in",
-                        values=frozenset({"https://api.example.com/v1/send"}),
-                        param="url",
+                        values=frozenset({"ibkr", "yahoo"}),
+                        param="destination",
                         breach_verdict="BLOCK",
                     )
                 ]
@@ -892,13 +922,15 @@ async def test_web_post_executor_not_in_engine_kwargs() -> None:
         }
     )
     executor = AsyncMock(return_value={"status": "ok"})
-    post = make_post(engine, executor=executor)
+    post = make_post(engine, registry={"ibkr": executor})
 
     await post(
         agent_id="agent-1",
-        url="https://api.example.com/v1/send",
+        destination="ibkr",
         payload={"hello": "world"},
     )
 
     assert len(engine.captured_kwargs) == 1
     assert "executor" not in engine.captured_kwargs[0]
+    assert "url" not in engine.captured_kwargs[0]
+    assert "destination" in engine.captured_kwargs[0]
