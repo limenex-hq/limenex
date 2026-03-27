@@ -10,13 +10,17 @@ Without an enforcement layer outside the model, a single malicious input can dra
 Wire it once at startup. Zero changes to your agent logic or executors.
 
 ```python
-# Limenex-governed skill — wired once at startup
-charge = make_charge(policy_engine)
-
-# Pass your executor — Limenex decides if it runs
-await charge(
-    agent_id="agent-1", amount=49.99, currency="USD", executor=charge_customer
+# Wire once at startup — executor registry is invisible to the agent
+charge = make_charge(
+    policy_engine,
+    registry={
+        "stripe": charge_via_stripe,
+        "square": charge_via_square,
+    }
 )
+
+# Agent expresses intent in plain data — no executor knowledge required
+await charge(agent_id="agent-1", provider="stripe", amount=49.99, currency="USD")
 ```
 ### How it works
 AI agents are like employees at your organisation. They can think and innovate freely — but policies draw the line between what they can execute unilaterally and what requires sign-off. That's exactly how Limenex works: what actions are allowed, what requires human approval, and what is never permitted — defined in config, not in a prompt.
