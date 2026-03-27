@@ -10,6 +10,7 @@ from limenex.core.policy import (
     PolicyConfig,
     UnregisteredSkillError,
 )
+from limenex.skills import UnregisteredExecutorError
 from limenex.skills.comms import make_send
 from limenex.skills.filesystem import make_delete, make_move, make_write
 from limenex.skills.finance import make_charge, make_spend
@@ -43,8 +44,31 @@ class SpyStateStore:
         )
 
 
+class CapturingPolicyEngine(PolicyEngine):
+    """PolicyEngine subclass that captures kwargs seen by evaluate().
+
+    Used to assert that executor is never present in the kwargs the engine
+    receives — regardless of whether it was a call-time parameter or not.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.captured_kwargs: list[dict] = []
+
+    async def evaluate(self, skill_id: str, agent_id: str, kwargs: dict) -> object:
+        self.captured_kwargs.append(dict(kwargs))
+        return await super().evaluate(skill_id, agent_id, kwargs)
+
+
 def make_engine(configs: dict[str, PolicyConfig]) -> PolicyEngine:
     return PolicyEngine(
+        policy_store=InMemoryPolicyStore(configs),
+        state_store=SpyStateStore(),
+    )
+
+
+def make_capturing_engine(configs: dict[str, PolicyConfig]) -> CapturingPolicyEngine:
+    return CapturingPolicyEngine(
         policy_store=InMemoryPolicyStore(configs),
         state_store=SpyStateStore(),
     )
@@ -71,18 +95,48 @@ async def test_charge_allow_calls_sync_executor_and_returns_value() -> None:
             )
         }
     )
-    charge = make_charge(engine)
     executor = Mock(return_value="charge-ok")
+    charge = make_charge(engine, registry={"stripe": executor})
 
     result = await charge(
         agent_id="agent-1",
+        provider="stripe",
         amount=10.0,
         currency="USD",
-        executor=executor,
     )
 
     assert result == "charge-ok"
     executor.assert_called_once_with(amount=10.0, currency="USD")
+
+
+async def test_charge_allow_calls_async_executor_and_returns_value() -> None:
+    engine = make_engine(
+        {
+            "finance.charge": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="4h_spend",
+                        operator="lt",
+                        value=50.0,
+                        param="amount",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = AsyncMock(return_value="charge-ok-async")
+    charge = make_charge(engine, registry={"stripe": executor})
+
+    result = await charge(
+        agent_id="agent-1",
+        provider="stripe",
+        amount=10.0,
+        currency="USD",
+    )
+
+    assert result == "charge-ok-async"
+    executor.assert_awaited_once_with(amount=10.0, currency="USD")
 
 
 async def test_charge_block_does_not_call_executor() -> None:
@@ -101,18 +155,137 @@ async def test_charge_block_does_not_call_executor() -> None:
             )
         }
     )
-    charge = make_charge(engine)
     executor = Mock()
+    charge = make_charge(engine, registry={"stripe": executor})
 
     with pytest.raises(BlockedError):
         await charge(
             agent_id="agent-1",
+            provider="stripe",
             amount=10.0,
             currency="USD",
-            executor=executor,
         )
 
     executor.assert_not_called()
+
+
+async def test_charge_escalate_does_not_call_executor() -> None:
+    engine = make_engine(
+        {
+            "finance.charge": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="4h_spend",
+                        operator="lt",
+                        value=5.0,
+                        param="amount",
+                        breach_verdict="ESCALATE",
+                    )
+                ]
+            )
+        }
+    )
+    executor = Mock()
+    charge = make_charge(engine, registry={"stripe": executor})
+
+    with pytest.raises(EscalationRequired):
+        await charge(
+            agent_id="agent-1",
+            provider="stripe",
+            amount=10.0,
+            currency="USD",
+        )
+
+    executor.assert_not_called()
+
+
+async def test_charge_unregistered_provider_raises_before_governance() -> None:
+    state_store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="4h_spend",
+                            operator="lt",
+                            value=50.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=state_store,
+    )
+    charge = make_charge(engine, registry={"stripe": Mock()})
+
+    with pytest.raises(UnregisteredExecutorError) as exc_info:
+        await charge(
+            agent_id="agent-1",
+            provider="square",
+            amount=10.0,
+            currency="USD",
+        )
+
+    assert exc_info.value.skill_id == "finance.charge"
+    assert exc_info.value.key == "square"
+    assert state_store.record_calls == []
+
+
+async def test_charge_executor_not_in_engine_kwargs() -> None:
+    engine = make_capturing_engine(
+        {
+            "finance.charge": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="4h_spend",
+                        operator="lt",
+                        value=50.0,
+                        param="amount",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = Mock(return_value="ok")
+    charge = make_charge(engine, registry={"stripe": executor})
+
+    await charge(agent_id="agent-1", provider="stripe", amount=10.0, currency="USD")
+
+    assert len(engine.captured_kwargs) == 1
+    assert "executor" not in engine.captured_kwargs[0]
+
+
+async def test_spend_allow_calls_sync_executor_and_returns_value() -> None:
+    engine = make_engine(
+        {
+            "finance.spend": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="daily_spend_usd",
+                        operator="lt",
+                        value=100.0,
+                        param="amount_usd",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = Mock(return_value={"ok": True})
+    spend = make_spend(engine, registry={"aws": executor})
+
+    result = await spend(
+        agent_id="agent-1",
+        service="aws",
+        amount_usd=25.0,
+    )
+
+    assert result == {"ok": True}
+    executor.assert_called_once_with(amount_usd=25.0)
 
 
 async def test_spend_allow_calls_async_executor_and_returns_value() -> None:
@@ -131,18 +304,46 @@ async def test_spend_allow_calls_async_executor_and_returns_value() -> None:
             )
         }
     )
-    spend = make_spend(engine)
     executor = AsyncMock(return_value={"ok": True})
+    spend = make_spend(engine, registry={"aws": executor})
 
     result = await spend(
         agent_id="agent-1",
         service="aws",
         amount_usd=25.0,
-        executor=executor,
     )
 
     assert result == {"ok": True}
-    executor.assert_awaited_once_with(service="aws", amount_usd=25.0)
+    executor.assert_awaited_once_with(amount_usd=25.0)
+
+
+async def test_spend_block_does_not_call_executor() -> None:
+    engine = make_engine(
+        {
+            "finance.spend": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="daily_spend_usd",
+                        operator="lt",
+                        value=10.0,
+                        param="amount_usd",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = AsyncMock()
+    spend = make_spend(engine, registry={"aws": executor})
+
+    with pytest.raises(BlockedError):
+        await spend(
+            agent_id="agent-1",
+            service="aws",
+            amount_usd=25.0,
+        )
+
+    executor.assert_not_called()
 
 
 async def test_spend_escalate_does_not_call_executor() -> None:
@@ -161,18 +362,76 @@ async def test_spend_escalate_does_not_call_executor() -> None:
             )
         }
     )
-    spend = make_spend(engine)
     executor = AsyncMock()
+    spend = make_spend(engine, registry={"openai": executor})
 
     with pytest.raises(EscalationRequired):
         await spend(
             agent_id="agent-1",
             service="openai",
             amount_usd=25.0,
-            executor=executor,
         )
 
     executor.assert_not_called()
+
+
+async def test_spend_unregistered_service_raises_before_governance() -> None:
+    state_store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.spend": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="daily_spend_usd",
+                            operator="lt",
+                            value=100.0,
+                            param="amount_usd",
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=state_store,
+    )
+    spend = make_spend(engine, registry={"aws": AsyncMock()})
+
+    with pytest.raises(UnregisteredExecutorError) as exc_info:
+        await spend(
+            agent_id="agent-1",
+            service="gcp",
+            amount_usd=25.0,
+        )
+
+    assert exc_info.value.skill_id == "finance.spend"
+    assert exc_info.value.key == "gcp"
+    assert state_store.record_calls == []
+
+
+async def test_spend_executor_not_in_engine_kwargs() -> None:
+    engine = make_capturing_engine(
+        {
+            "finance.spend": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="daily_spend_usd",
+                        operator="lt",
+                        value=100.0,
+                        param="amount_usd",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = AsyncMock(return_value={"ok": True})
+    spend = make_spend(engine, registry={"aws": executor})
+
+    await spend(agent_id="agent-1", service="aws", amount_usd=25.0)
+
+    assert len(engine.captured_kwargs) == 1
+    assert "executor" not in engine.captured_kwargs[0]
 
 
 # ---------------------------------------------------------------------------
@@ -311,20 +570,18 @@ async def test_comms_send_allow_calls_sync_executor() -> None:
             )
         }
     )
-    send = make_send(engine)
     executor = Mock(return_value="sent")
+    send = make_send(engine, registry={"email": executor})
 
     result = await send(
         agent_id="agent-1",
         channel="email",
         recipient="alice@example.com",
         text="hello",
-        executor=executor,
     )
 
     assert result == "sent"
     executor.assert_called_once_with(
-        channel="email",
         recipient="alice@example.com",
         text="hello",
     )
@@ -348,8 +605,8 @@ async def test_comms_send_recipient_blocklist_blocks_exact_match_and_never_calls
             )
         }
     )
-    send = make_send(engine)
     executor = AsyncMock()
+    send = make_send(engine, registry={"email": executor})
 
     with pytest.raises(BlockedError):
         await send(
@@ -357,7 +614,6 @@ async def test_comms_send_recipient_blocklist_blocks_exact_match_and_never_calls
             channel="email",
             recipient="alice@baddomain.com",
             text="should not send",
-            executor=executor,
         )
 
     executor.assert_not_called()
@@ -381,20 +637,18 @@ async def test_comms_send_recipient_blocklist_uses_exact_string_not_domain_match
             )
         }
     )
-    send = make_send(engine)
     executor = AsyncMock(return_value="sent")
+    send = make_send(engine, registry={"email": executor})
 
     result = await send(
         agent_id="agent-1",
         channel="email",
         recipient="bob@baddomain.com",
         text="allowed because exact recipient is different",
-        executor=executor,
     )
 
     assert result == "sent"
     executor.assert_awaited_once_with(
-        channel="email",
         recipient="bob@baddomain.com",
         text="allowed because exact recipient is different",
     )
@@ -415,8 +669,8 @@ async def test_comms_send_escalate_does_not_call_executor() -> None:
             )
         }
     )
-    send = make_send(engine)
     executor = AsyncMock()
+    send = make_send(engine, registry={"slack": executor})
 
     with pytest.raises(EscalationRequired):
         await send(
@@ -424,10 +678,72 @@ async def test_comms_send_escalate_does_not_call_executor() -> None:
             channel="slack",
             recipient="ops",
             text="check this",
-            executor=executor,
         )
 
     executor.assert_not_called()
+
+
+async def test_comms_send_unregistered_channel_raises_before_governance() -> None:
+    state_store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "comms.send": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="daily_messages",
+                            operator="lt",
+                            value=10.0,
+                            breach_verdict="BLOCK",
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=state_store,
+    )
+    send = make_send(engine, registry={"email": Mock()})
+
+    with pytest.raises(UnregisteredExecutorError) as exc_info:
+        await send(
+            agent_id="agent-1",
+            channel="whatsapp",
+            recipient="+85291234567",
+            text="hello",
+        )
+
+    assert exc_info.value.skill_id == "comms.send"
+    assert exc_info.value.key == "whatsapp"
+    assert state_store.record_calls == []
+
+
+async def test_comms_send_executor_not_in_engine_kwargs() -> None:
+    engine = make_capturing_engine(
+        {
+            "comms.send": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="daily_messages",
+                        operator="lt",
+                        value=10.0,
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = Mock(return_value="sent")
+    send = make_send(engine, registry={"email": executor})
+
+    await send(
+        agent_id="agent-1",
+        channel="email",
+        recipient="alice@example.com",
+        text="hello",
+    )
+
+    assert len(engine.captured_kwargs) == 1
+    assert "executor" not in engine.captured_kwargs[0]
 
 
 # ---------------------------------------------------------------------------
@@ -451,18 +767,49 @@ async def test_web_post_allow_calls_async_executor() -> None:
             )
         }
     )
-    post = make_post(engine)
     executor = AsyncMock(return_value={"status": "ok"})
+    post = make_post(engine, executor=executor)
 
     result = await post(
         agent_id="agent-1",
         url="https://api.example.com/v1/send",
         payload={"hello": "world"},
-        executor=executor,
     )
 
     assert result == {"status": "ok"}
     executor.assert_awaited_once_with(
+        url="https://api.example.com/v1/send",
+        payload={"hello": "world"},
+    )
+
+
+async def test_web_post_allow_calls_sync_executor() -> None:
+    engine = make_engine(
+        {
+            "web.post": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="approved_urls",
+                        operator="in",
+                        values=frozenset({"https://api.example.com/v1/send"}),
+                        param="url",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = Mock(return_value={"status": "ok"})
+    post = make_post(engine, executor=executor)
+
+    result = await post(
+        agent_id="agent-1",
+        url="https://api.example.com/v1/send",
+        payload={"hello": "world"},
+    )
+
+    assert result == {"status": "ok"}
+    executor.assert_called_once_with(
         url="https://api.example.com/v1/send",
         payload={"hello": "world"},
     )
@@ -486,15 +833,14 @@ async def test_web_post_url_allowlist_blocks_unapproved_url_and_never_calls_exec
             )
         }
     )
-    post = make_post(engine)
     executor = AsyncMock()
+    post = make_post(engine, executor=executor)
 
     with pytest.raises(BlockedError):
         await post(
             agent_id="agent-1",
             url="https://evil.example.com/collect",
             payload={"hello": "world"},
-            executor=executor,
         )
 
     executor.assert_not_called()
@@ -516,15 +862,43 @@ async def test_web_post_escalate_does_not_call_executor() -> None:
             )
         }
     )
-    post = make_post(engine)
     executor = AsyncMock()
+    post = make_post(engine, executor=executor)
 
     with pytest.raises(EscalationRequired):
         await post(
             agent_id="agent-1",
             url="https://evil.example.com/collect",
             payload={"hello": "world"},
-            executor=executor,
         )
 
     executor.assert_not_called()
+
+
+async def test_web_post_executor_not_in_engine_kwargs() -> None:
+    engine = make_capturing_engine(
+        {
+            "web.post": PolicyConfig(
+                policies=[
+                    DeterministicPolicy(
+                        dimension="approved_urls",
+                        operator="in",
+                        values=frozenset({"https://api.example.com/v1/send"}),
+                        param="url",
+                        breach_verdict="BLOCK",
+                    )
+                ]
+            )
+        }
+    )
+    executor = AsyncMock(return_value={"status": "ok"})
+    post = make_post(engine, executor=executor)
+
+    await post(
+        agent_id="agent-1",
+        url="https://api.example.com/v1/send",
+        payload={"hello": "world"},
+    )
+
+    assert len(engine.captured_kwargs) == 1
+    assert "executor" not in engine.captured_kwargs[0]
