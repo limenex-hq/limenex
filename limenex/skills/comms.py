@@ -6,10 +6,10 @@ obtained via a factory that binds it to a PolicyEngine instance at
 application startup.
 
 Skill IDs (reference these in .limenex/policies.yaml):
-    comms.send  —  send a message to a recipient over a channel
+    comms.send — send a message to a recipient over a channel
 
 Policy guidance:
-    String parameters (channel, recipient) now support exact-string
+    String parameters (channel, recipient) support exact-string
     DeterministicPolicy checks using in/not_in operators. This enables
     recipient blocklists, channel allowlists, and similar membership-based
     controls without routing to SemanticPolicy.
@@ -25,7 +25,6 @@ Policy guidance:
     targeting the text parameter. For structural matching such as domain-level
     blocking, pre-process the value before calling the skill (e.g. extract the
     domain from the recipient address) and use in/not_in on the extracted value.
-
 """
 
 from __future__ import annotations
@@ -34,6 +33,7 @@ import asyncio
 from typing import Callable
 
 from limenex.core.engine import PolicyEngine
+from limenex.skills._exceptions import UnregisteredExecutorError
 from limenex.skills._types import ReturnT
 
 __all__ = [
@@ -44,18 +44,25 @@ __all__ = [
 SEND_SKILL_ID: str = "comms.send"
 
 
-def make_send(engine: PolicyEngine) -> Callable:
+def make_send(engine: PolicyEngine, registry: dict[str, Callable]) -> Callable:
     """Return a governed send skill bound to engine.
 
     Call once at application startup. The returned callable is safe to reuse
     across concurrent async tasks — no shared mutable state.
 
     Args:
-        engine: The PolicyEngine instance to bind this skill to.
+        engine:   The PolicyEngine instance to bind this skill to.
+        registry: Mapping of channel name to executor callable.
+                  Keys must match the channel strings the agent will pass
+                  at call time (e.g. {"email": send_via_email,
+                  "sms": send_via_sms, "whatsapp": send_via_whatsapp}).
+                  Executors receive (recipient=recipient, text=text).
+                  agent_id and channel are never forwarded.
+                  Sync and async callables are both supported.
 
     Returns:
         An async callable with signature:
-        send(agent_id, channel, recipient, text, executor) -> ReturnT
+        send(agent_id, channel, recipient, text) -> ReturnT
     """
 
     @engine.governed(SEND_SKILL_ID, agent_id_param="agent_id")
@@ -67,15 +74,24 @@ def make_send(engine: PolicyEngine) -> Callable:
         channel: str,
         recipient: str,
         text: str,
-        executor: Callable[..., ReturnT],
     ) -> ReturnT:
         """Governed skill: send a message to a recipient over a channel.
 
         Evaluates all policies registered under SEND_SKILL_ID before
-        executing the injected executor. The executor is never called on
-        BLOCK or ESCALATE verdicts.
+        dispatching to the executor registered for channel. The executor
+        is never called on BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
+            channel (str): Supports exact-string DeterministicPolicy checks
+                via in/not_in operators. Example: restrict sending to approved
+                channels using DeterministicPolicy(
+                    operator="in",
+                    values=frozenset({"email", "sms"}),
+                    param="channel",
+                    breach_verdict="BLOCK",
+                ).
+                Matching is exact and case-sensitive.
+
             recipient (str): Supports exact-string DeterministicPolicy checks
                 via in/not_in operators. Example: block sending to a known
                 set of bad actors using DeterministicPolicy(
@@ -90,16 +106,6 @@ def make_send(engine: PolicyEngine) -> Callable:
                 skill (e.g. domain = recipient.split("@")[-1]) and pass the
                 extracted value as the governed parameter instead.
 
-            channel (str): Supports exact-string DeterministicPolicy checks
-                via in/not_in operators. Example: restrict sending to approved
-                channels using DeterministicPolicy(
-                    operator="in",
-                    values=frozenset({"email", "slack"}),
-                    param="channel",
-                    breach_verdict="BLOCK",
-                ).
-                Matching is exact and case-sensitive.
-
             text (str): Not a good fit for DeterministicPolicy. Use
                 SemanticPolicy for content-based rules (e.g. "do not
                 transmit PII or credentials in outbound messages").
@@ -108,36 +114,43 @@ def make_send(engine: PolicyEngine) -> Callable:
                 param=None to govern how often send is called
                 (e.g. daily outbound message count).
 
+        Governance timing: state is recorded after governance passes but before
+        the executor runs. Executor failure does not roll back recorded state —
+        governance tracks authorisation, not execution outcome.
+
         Args:
             agent_id:   The agent initiating this send. Used by the engine
                         to resolve and record policy state.
-            channel:    Delivery channel (e.g. "email", "slack", "sms").
+            channel:    Delivery channel (e.g. "email", "sms", "whatsapp").
+                        Must match a key in the registry supplied to make_send.
                         Supports exact-string in/not_in policy checks.
-                        Forwarded to the executor.
+                        Never forwarded to the executor.
             recipient:  Destination address or identifier
-                        (e.g. "alice@example.com", "ops-team"). Supports
+                        (e.g. "alice@example.com", "+85291234567"). Supports
                         exact-string in/not_in policy checks. Forwarded to
                         the executor. Matching is against the exact string
                         as provided — no domain extraction is performed.
             text:       Message body. Forwarded to the executor. Use
                         SemanticPolicy for content-based governance.
-            executor:   Developer-injected callable that performs the actual
-                        message delivery. Receives (channel=channel,
-                        recipient=recipient, text=text). agent_id is never
-                        forwarded. Sync and async callables are both supported.
 
         Returns:
             Whatever the executor returns.
 
         Raises:
-            BlockedError:        Policy verdict is BLOCK. Executor was not called.
-            EscalationRequired:  Policy verdict is ESCALATE. Executor was not called.
+            UnregisteredExecutorError: channel has no entry in the registry
+                                       supplied to make_send. Executor was
+                                       not called and no state was recorded.
+            BlockedError:              Policy verdict is BLOCK. Executor was not called.
+            EscalationRequired:        Policy verdict is ESCALATE. Executor was not called.
         """
+        if channel not in registry:
+            raise UnregisteredExecutorError(SEND_SKILL_ID, channel)
+        executor = registry[channel]
         await _governed(
             agent_id=agent_id, channel=channel, recipient=recipient, text=text
         )
         if asyncio.iscoroutinefunction(executor):
-            return await executor(channel=channel, recipient=recipient, text=text)
-        return executor(channel=channel, recipient=recipient, text=text)
+            return await executor(recipient=recipient, text=text)
+        return executor(recipient=recipient, text=text)
 
     return send

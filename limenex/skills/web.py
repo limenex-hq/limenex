@@ -6,10 +6,10 @@ obtained via a factory that binds it to a PolicyEngine instance at
 application startup.
 
 Skill IDs (reference these in .limenex/policies.yaml):
-    web.post  —  send an HTTP POST request to a URL
+    web.post — send an HTTP POST request to a URL
 
 Policy guidance:
-    The url parameter now supports exact-string DeterministicPolicy checks
+    The url parameter supports exact-string DeterministicPolicy checks
     using in/not_in operators. This enables URL allowlists and blocklists
     without routing to SemanticPolicy.
 
@@ -41,18 +41,22 @@ __all__ = [
 POST_SKILL_ID: str = "web.post"
 
 
-def make_post(engine: PolicyEngine) -> Callable:
+def make_post(engine: PolicyEngine, executor: Callable[..., ReturnT]) -> Callable:
     """Return a governed HTTP POST skill bound to engine.
 
     Call once at application startup. The returned callable is safe to reuse
     across concurrent async tasks — no shared mutable state.
 
     Args:
-        engine: The PolicyEngine instance to bind this skill to.
+        engine:   The PolicyEngine instance to bind this skill to.
+        executor: The HTTP client callable that performs the actual POST
+                  request. Receives (url=url, payload=payload). agent_id
+                  is never forwarded. Sync and async callables are both
+                  supported.
 
     Returns:
         An async callable with signature:
-        post(agent_id, url, payload, executor) -> ReturnT
+        post(agent_id, url, payload) -> ReturnT
     """
 
     @engine.governed(POST_SKILL_ID, agent_id_param="agent_id")
@@ -63,13 +67,12 @@ def make_post(engine: PolicyEngine) -> Callable:
         agent_id: str,
         url: str,
         payload: dict[str, Any],
-        executor: Callable[..., ReturnT],
     ) -> ReturnT:
         """Governed skill: send an HTTP POST request to a URL.
 
         Evaluates all policies registered under POST_SKILL_ID before
-        executing the injected executor. The executor is never called on
-        BLOCK or ESCALATE verdicts.
+        dispatching to the executor supplied at factory time. The executor
+        is never called on BLOCK or ESCALATE verdicts.
 
         Policy dimensions:
             url (str): Supports exact-string DeterministicPolicy checks via
@@ -98,6 +101,10 @@ def make_post(engine: PolicyEngine) -> Callable:
                 param=None to govern how often post is called
                 (e.g. daily outbound request count).
 
+        Governance timing: state is recorded after governance passes but before
+        the executor runs. Executor failure does not roll back recorded state —
+        governance tracks authorisation, not execution outcome.
+
         Args:
             agent_id:  The agent initiating this POST. Used by the engine
                        to resolve and record policy state.
@@ -106,10 +113,6 @@ def make_post(engine: PolicyEngine) -> Callable:
                        normalisation. Forwarded to the executor.
             payload:   Request body as a dict. Forwarded to the executor.
                        Use SemanticPolicy for content-based governance.
-            executor:  Developer-injected callable that performs the actual
-                       HTTP request. Receives (url=url, payload=payload).
-                       agent_id is never forwarded. Sync and async callables
-                       are both supported.
 
         Returns:
             Whatever the executor returns.
