@@ -1,0 +1,1497 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Deterministic governance for AI agents and agentic systems">
+      
+      
+      
+        <link rel="canonical" href="https://limenex.dev/contributing/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Contributing - Limenex</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#contributing-to-limenex" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Limenex" class="md-header__button md-logo" aria-label="Limenex" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Limenex
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Contributing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="lime"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/limenex-hq/limenex" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    limenex-hq/limenex
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Limenex" class="md-nav__button md-logo" aria-label="Limenex" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Limenex
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/limenex-hq/limenex" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    limenex-hq/limenex
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting Started
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-contribute" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Contribute
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reporting-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reporting Issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start-a-larger-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before You Start a Larger Change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing Skills
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contributing Skills">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design Principles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Design Principles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-govern-the-action-category-not-the-vendor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Govern the action category, not the vendor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-narrow-scope-is-mandatory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Narrow scope is mandatory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-the-agent-call-surface-stays-plain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The agent call surface stays plain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-deterministic-governance-should-be-easy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Deterministic governance should be easy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-and-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming and Placement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function-signature-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function Signature Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-vs-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async vs Sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-implementation-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Implementation Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Required Implementation Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-a-executor-injected-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern A: Executor-Injected Skills
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-b-direct-local-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern B: Direct Local Skills
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docstring-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docstring Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pull-request-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull Request Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pull Request Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-all-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For All PRs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-new-skills-in-addition-to-the-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For New Skills (in addition to the above)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#good-skill-ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Good Skill Ideas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-not-to-submit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Not to Submit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licensing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licensing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting Started
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-contribute" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Contribute
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Style
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reporting-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reporting Issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start-a-larger-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before You Start a Larger Change
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing Skills
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contributing Skills">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design Principles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Design Principles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-govern-the-action-category-not-the-vendor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Govern the action category, not the vendor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-narrow-scope-is-mandatory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Narrow scope is mandatory
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-the-agent-call-surface-stays-plain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The agent call surface stays plain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-deterministic-governance-should-be-easy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Deterministic governance should be easy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-and-placement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming and Placement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function-signature-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function Signature Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-vs-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Async vs Sync
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#required-implementation-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Implementation Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Required Implementation Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-a-executor-injected-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern A: Executor-Injected Skills
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-b-direct-local-skills" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern B: Direct Local Skills
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#docstring-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docstring Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Requirements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Requirements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pull-request-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull Request Checklist
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pull Request Checklist">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-all-prs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For All PRs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-new-skills-in-addition-to-the-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For New Skills (in addition to the above)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#good-skill-ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Good Skill Ideas
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-not-to-submit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Not to Submit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#licensing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Licensing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="contributing-to-limenex">Contributing to Limenex<a class="headerlink" href="#contributing-to-limenex" title="Permanent link">&para;</a></h1>
+<p>Limenex is an agentic AI execution governance layer. Its purpose is simple: intercept consequential agent actions before execution, evaluate them against policies, and either allow, block, or escalate them.</p>
+<p>We welcome contributions of all kinds — bug reports, feature requests, documentation improvements, and code. Right now, the most valuable contributions are improvements to the core library, documentation, tests, and especially <strong>new governed skills</strong>.</p>
+<p>This guide explains how to contribute well, with detailed guidance on adding new skills to the library. Please read it before opening a pull request.</p>
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#getting-started">Getting Started</a></li>
+<li><a href="#how-to-contribute">How to Contribute</a></li>
+<li><a href="#code-style">Code Style</a></li>
+<li><a href="#reporting-issues">Reporting Issues</a></li>
+<li><a href="#before-you-start-a-larger-change">Before You Start a Larger Change</a></li>
+<li><a href="#contributing-skills">Contributing Skills</a></li>
+<li><a href="#design-principles">Design Principles</a></li>
+<li><a href="#naming-and-placement">Naming and Placement</a></li>
+<li><a href="#function-signature-rules">Function Signature Rules</a></li>
+<li><a href="#async-vs-sync">Async vs Sync</a></li>
+<li><a href="#required-implementation-patterns">Required Implementation Patterns</a></li>
+<li><a href="#pattern-a-executor-injected-skills">Pattern A: Executor-Injected Skills</a></li>
+<li><a href="#pattern-b-direct-local-skills">Pattern B: Direct Local Skills</a></li>
+<li><a href="#docstring-requirements">Docstring Requirements</a></li>
+<li><a href="#testing-requirements">Testing Requirements</a></li>
+<li><a href="#pull-request-checklist">Pull Request Checklist</a></li>
+<li><a href="#good-skill-ideas">Good Skill Ideas</a></li>
+<li><a href="#what-not-to-submit">What Not to Submit</a></li>
+<li><a href="#questions">Questions</a></li>
+<li><a href="#licensing">Licensing</a></li>
+</ul>
+<hr />
+<h2 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Clone the repository:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/limenex-hq/limenex.git
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>limenex
+</code></pre></div></li>
+<li>Create and activate a virtual environment:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+</code></pre></div></li>
+<li>Install the package in editable mode with dev dependencies:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[dev]&quot;</span>
+</code></pre></div></li>
+<li>Run the test suite to verify your setup:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pytest
+</code></pre></div></li>
+</ol>
+<h2 id="how-to-contribute">How to Contribute<a class="headerlink" href="#how-to-contribute" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Fork the repository on GitHub.</li>
+<li>Create a feature branch from <code>main</code>:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/your-feature-name
+</code></pre></div></li>
+<li>Make your changes.</li>
+<li>Ensure all tests pass and code style is clean:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pytest
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>black<span class="w"> </span>--check<span class="w"> </span>.
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ruff<span class="w"> </span>check<span class="w"> </span>.
+</code></pre></div></li>
+<li>Open a pull request against <code>main</code> with a clear description of your changes.</li>
+</ol>
+<h2 id="code-style">Code Style<a class="headerlink" href="#code-style" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>black</strong> for code formatting</li>
+<li><strong>ruff</strong> for linting</li>
+<li>Line length: <strong>88</strong> characters</li>
+<li>All style rules are enforced by CI — please ensure your code passes before opening a PR.</li>
+</ul>
+<h2 id="reporting-issues">Reporting Issues<a class="headerlink" href="#reporting-issues" title="Permanent link">&para;</a></h2>
+<p>Please use <a href="https://github.com/limenex-hq/limenex/issues">GitHub Issues</a> to report bugs. When filing an issue, include:</p>
+<ul>
+<li>Your Python version</li>
+<li>Your operating system</li>
+<li>A minimal reproducible example</li>
+</ul>
+<h2 id="before-you-start-a-larger-change">Before You Start a Larger Change<a class="headerlink" href="#before-you-start-a-larger-change" title="Permanent link">&para;</a></h2>
+<p>Before starting work on a new skill category, a change to the policy model, a public API change, or a major documentation restructure, please open an issue or start a discussion first. This helps us align on scope early and avoids wasted effort.</p>
+<p>For small bug fixes and documentation tweaks, a direct pull request is fine.</p>
+<hr />
+<h2 id="contributing-skills">Contributing Skills<a class="headerlink" href="#contributing-skills" title="Permanent link">&para;</a></h2>
+<p>This is the main section of this guide. Everything below explains how to design, implement, test, and submit a new governed skill.</p>
+<h3 id="design-principles">Design Principles<a class="headerlink" href="#design-principles" title="Permanent link">&para;</a></h3>
+<p>Limenex is opinionated about what a skill is and how it should be built. All contributed skills must preserve these principles.</p>
+<h4 id="1-govern-the-action-category-not-the-vendor">1. Govern the action category, not the vendor<a class="headerlink" href="#1-govern-the-action-category-not-the-vendor" title="Permanent link">&para;</a></h4>
+<p>Skills are named after what they do, not which SDK or service they call. The risk Limenex governs is the action itself — vendor-specific behavior belongs inside the executor, not the skill identity.</p>
+<p>Good:
+- <code>finance.charge</code>
+- <code>comms.send</code>
+- <code>filesystem.delete</code></p>
+<p>Bad:
+- <code>stripe_charge</code>
+- <code>send_slack_message</code>
+- <code>top_up_openai_credits</code></p>
+<h4 id="2-narrow-scope-is-mandatory">2. Narrow scope is mandatory<a class="headerlink" href="#2-narrow-scope-is-mandatory" title="Permanent link">&para;</a></h4>
+<p>A skill wraps one tightly-scoped, consequential action. If you cannot write a clear, bounded policy against a function, it is too broad to be a Limenex skill.</p>
+<p>Good:
+- Send a message
+- Charge a payment
+- Delete a file</p>
+<p>Bad:
+- Process a transaction (auth, capture, refund are separate risks)
+- Send and log a message (sending is consequential, logging is not)</p>
+<h4 id="3-the-agent-call-surface-stays-plain">3. The agent call surface stays plain<a class="headerlink" href="#3-the-agent-call-surface-stays-plain" title="Permanent link">&para;</a></h4>
+<p>The agent-facing function accepts only plain data parameters relevant to the action. Executors are never passed at call time — they are bound once at application startup through the skill factory.</p>
+<h4 id="4-deterministic-governance-should-be-easy">4. Deterministic governance should be easy<a class="headerlink" href="#4-deterministic-governance-should-be-easy" title="Permanent link">&para;</a></h4>
+<p>When designing a skill, prefer signatures that map cleanly to policy:</p>
+<ul>
+<li><strong>Numeric parameters</strong> (<code>amount</code>, <code>amount_usd</code>, <code>estimated_cost_usd</code>) → good for deterministic threshold checks</li>
+<li><strong>String parameters</strong> (<code>filepath</code>, <code>recipient</code>, <code>channel</code>, <code>region</code>) → good for exact-string allowlists/blocklists via <code>in</code>/<code>not_in</code></li>
+<li><strong>Content-heavy parameters</strong> (message body, payload) → usually better governed with <code>SemanticPolicy</code></li>
+</ul>
+<p>Limenex does not normalize, parse, or extract structure from strings. If a caller needs domain-level or prefix-based matching, they should pre-process the value before passing it to the skill.</p>
+<h3 id="naming-and-placement">Naming and Placement<a class="headerlink" href="#naming-and-placement" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Function names should be short and action-generic: <code>send</code>, <code>post</code>, <code>delete</code>.</li>
+<li>The governed <code>skill_id</code> must use <code>&lt;category&gt;.&lt;action&gt;</code> namespacing: <code>comms.send</code>, <code>finance.charge</code>.</li>
+<li>Add the skill to the matching module under <code>limenex/skills/</code> when a category already exists.</li>
+<li>Create a new category module only when the action category is genuinely new.</li>
+<li>Export the factory function and the skill ID constant from <code>limenex/skills/__init__.py</code>.</li>
+</ul>
+<h3 id="function-signature-rules">Function Signature Rules<a class="headerlink" href="#function-signature-rules" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>agent_id: str</code> is always the first parameter.</li>
+<li>Remaining parameters are plain domain data only.</li>
+<li>Do not expose executor callables in the call-time signature.</li>
+<li>Reuse <code>ReturnT</code> from <code>limenex.skills._types</code> for executor-backed skills. Do not define a local <code>TypeVar</code>.</li>
+</ul>
+<h3 id="async-vs-sync">Async vs Sync<a class="headerlink" href="#async-vs-sync" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Executor-injected skills</strong> → <code>async def</code>. This matches finance, comms, and web skills.</li>
+<li><strong>Stdlib-only local action skills</strong> → may be synchronous. This matches filesystem skills.</li>
+</ul>
+<hr />
+<h2 id="required-implementation-patterns">Required Implementation Patterns<a class="headerlink" href="#required-implementation-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="pattern-a-executor-injected-skills">Pattern A: Executor-Injected Skills<a class="headerlink" href="#pattern-a-executor-injected-skills" title="Permanent link">&para;</a></h3>
+<p>Use this for skills that dispatch to one of several backends or vendors (e.g. <code>finance.charge</code>, <code>comms.send</code>, <code>web.post</code>).</p>
+<p>The factory binds the skill to a <code>PolicyEngine</code> and accepts a <code>registry</code> dict keyed by the discriminator parameter (e.g. <code>provider</code>, <code>service</code>, <code>channel</code>, <code>destination</code>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">limenex.core.engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">PolicyEngine</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">limenex.skills._exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">UnregisteredExecutorError</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">limenex.skills._types</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReturnT</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">MY_SKILL_ID</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;category.action&quot;</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_action</span><span class="p">(</span><span class="n">engine</span><span class="p">:</span> <span class="n">PolicyEngine</span><span class="p">,</span> <span class="n">registry</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a governed action skill bound to engine.</span>
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="sd">    Call once at application startup. The returned callable is safe to</span>
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="sd">    reuse across concurrent async tasks.</span>
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="sd">    Args:</span>
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="sd">        engine:   The PolicyEngine instance to bind this skill to.</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="sd">        registry: Mapping of backend name to executor callable.</span>
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="sd">                  Executors receive (arg1=arg1, arg2=arg2).</span>
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="sd">                  agent_id and backend are never forwarded.</span>
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="sd">                  Sync and async callables are both supported.</span>
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a><span class="sd">        An async callable with signature:</span>
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a><span class="sd">        action(agent_id, backend, arg1, arg2) -&gt; ReturnT</span>
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>    <span class="nd">@engine</span><span class="o">.</span><span class="n">governed</span><span class="p">(</span><span class="n">MY_SKILL_ID</span><span class="p">,</span> <span class="n">agent_id_param</span><span class="o">=</span><span class="s2">&quot;agent_id&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_governed</span><span class="p">(</span>
+<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>        <span class="n">agent_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">arg2</span><span class="p">:</span> <span class="nb">float</span>
+<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>        <span class="k">pass</span>
+<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
+<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">action</span><span class="p">(</span>
+<a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>        <span class="n">agent_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>        <span class="n">backend</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>        <span class="n">arg1</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+<a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>        <span class="n">arg2</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ReturnT</span><span class="p">:</span>
+<a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Governed skill: &lt;describe the action&gt;.</span>
+<a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a>
+<a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a><span class="sd">        &lt;Docstring body — see Docstring Requirements below.&gt;</span>
+<a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a>        <span class="k">if</span> <span class="n">backend</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">registry</span><span class="p">:</span>
+<a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a>            <span class="k">raise</span> <span class="n">UnregisteredExecutorError</span><span class="p">(</span><span class="n">MY_SKILL_ID</span><span class="p">,</span> <span class="n">backend</span><span class="p">)</span>
+<a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a>
+<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a>        <span class="k">await</span> <span class="n">_governed</span><span class="p">(</span>
+<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a>            <span class="n">agent_id</span><span class="o">=</span><span class="n">agent_id</span><span class="p">,</span>
+<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a>            <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a>            <span class="n">arg1</span><span class="o">=</span><span class="n">arg1</span><span class="p">,</span>
+<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a>            <span class="n">arg2</span><span class="o">=</span><span class="n">arg2</span><span class="p">,</span>
+<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a>        <span class="p">)</span>
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>
+<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>        <span class="n">executor</span> <span class="o">=</span> <span class="n">registry</span><span class="p">[</span><span class="n">backend</span><span class="p">]</span>
+<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>        <span class="k">if</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">iscoroutinefunction</span><span class="p">(</span><span class="n">executor</span><span class="p">):</span>
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>            <span class="k">return</span> <span class="k">await</span> <span class="n">executor</span><span class="p">(</span><span class="n">arg1</span><span class="o">=</span><span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="o">=</span><span class="n">arg2</span><span class="p">)</span>
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>        <span class="k">return</span> <span class="n">executor</span><span class="p">(</span><span class="n">arg1</span><span class="o">=</span><span class="n">arg1</span><span class="p">,</span> <span class="n">arg2</span><span class="o">=</span><span class="n">arg2</span><span class="p">)</span>
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>    <span class="k">return</span> <span class="n">action</span>
+</code></pre></div>
+<p><strong>Key points:</strong></p>
+<ul>
+<li><code>_governed</code> exists only for governance — it is the decorated inner function.</li>
+<li>The outer function is the real callable exposed to the application.</li>
+<li>The executor is captured from the factory closure, never passed by the agent.</li>
+<li>The executor must never appear in the kwargs seen by the policy engine.</li>
+<li>If the registry key is missing, raise <code>UnregisteredExecutorError</code> <strong>before</strong> governance runs.</li>
+<li>Governance state is recorded after governance passes but <strong>before</strong> the executor runs. Executor failure does not roll back recorded state.</li>
+</ul>
+<h3 id="pattern-b-direct-local-skills">Pattern B: Direct Local Skills<a class="headerlink" href="#pattern-b-direct-local-skills" title="Permanent link">&para;</a></h3>
+<p>Use this for narrow local actions with no executor injection (e.g. <code>filesystem.delete</code>, <code>filesystem.write</code>, <code>filesystem.move</code>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">limenex.core.engine</span><span class="w"> </span><span class="kn">import</span> <span class="n">PolicyEngine</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">MY_SKILL_ID</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;category.action&quot;</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">make_action</span><span class="p">(</span><span class="n">engine</span><span class="p">:</span> <span class="n">PolicyEngine</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">:</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a governed action skill bound to engine.</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="sd">    Call once at application startup. The returned callable is sync</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="sd">    and safe to reuse across calls.</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="sd">    Args:</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="sd">        engine: The PolicyEngine instance to bind this skill to.</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="sd">        A sync callable with signature:</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="sd">        action(agent_id, filepath) -&gt; None</span>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>    <span class="nd">@engine</span><span class="o">.</span><span class="n">governed</span><span class="p">(</span><span class="n">MY_SKILL_ID</span><span class="p">,</span> <span class="n">agent_id_param</span><span class="o">=</span><span class="s2">&quot;agent_id&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">action</span><span class="p">(</span><span class="n">agent_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">filepath</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Governed skill: &lt;describe the action&gt;.</span>
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>
+<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="sd">        &lt;Docstring body — see Docstring Requirements below.&gt;</span>
+<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>        <span class="n">Path</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>
+<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a>    <span class="k">return</span> <span class="n">action</span>
+</code></pre></div>
+<p><strong>Key points:</strong></p>
+<ul>
+<li>The decorator is applied directly to the function body — no two-layer split.</li>
+<li>Prefer standard library implementations when possible.</li>
+<li>Do not add a registry when there is no real need for executor injection.</li>
+<li>State is recorded <strong>after</strong> the stdlib operation completes. If the operation raises, state is not advanced.</li>
+</ul>
+<hr />
+<h2 id="docstring-requirements">Docstring Requirements<a class="headerlink" href="#docstring-requirements" title="Permanent link">&para;</a></h2>
+<p>Every contributed skill must have a thorough docstring. The docstring is part of the public API and part of the teaching surface of the project.</p>
+<p>At minimum, document:</p>
+<ul>
+<li>What the skill does and its <code>skill_id</code></li>
+<li>Which parameters are governance dimensions and what policy types they suit:</li>
+<li>Numeric parameters → <code>DeterministicPolicy</code> threshold checks</li>
+<li>String parameters → <code>DeterministicPolicy</code> <code>in</code>/<code>not_in</code> checks</li>
+<li>Content parameters → <code>SemanticPolicy</code></li>
+<li>What gets forwarded to the executor and what does not</li>
+<li>That the executor is never called on <code>BLOCK</code> or <code>ESCALATE</code></li>
+<li>Whether governance state is recorded before or after the actual side effect</li>
+</ul>
+<p>See <code>limenex/skills/finance.py</code> and <code>limenex/skills/comms.py</code> for reference examples.</p>
+<hr />
+<h2 id="testing-requirements">Testing Requirements<a class="headerlink" href="#testing-requirements" title="Permanent link">&para;</a></h2>
+<p>Every new skill must include tests. Add them to <code>tests/test_skills.py</code> or a new test file if introducing a new category.</p>
+<h3 id="required-coverage">Required Coverage<a class="headerlink" href="#required-coverage" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>ALLOW</strong> path — skill executes and returns the executor's return value</li>
+<li><strong>BLOCK</strong> path — <code>BlockedError</code> raised, executor never called</li>
+<li><strong>ESCALATE</strong> path — <code>EscalationRequired</code> raised, executor never called</li>
+<li><strong>Registry miss</strong> — <code>UnregisteredExecutorError</code> raised before governance runs (executor-injected skills only)</li>
+<li><strong>Sync executor dispatch</strong> — executor called correctly when sync</li>
+<li><strong>Async executor dispatch</strong> — executor called correctly when async</li>
+</ul>
+<h3 id="test-rules">Test Rules<a class="headerlink" href="#test-rules" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Mocks only.</strong> Never call live external services in tests.</li>
+<li><strong>Filesystem tests</strong> must use <code>tmp_path</code>.</li>
+<li><strong>Executor strip validation:</strong> add a test proving the executor is never present in the kwargs seen by the engine. Use <code>CapturingPolicyEngine</code> (a <code>PolicyEngine</code> subclass that overrides <code>evaluate()</code> to capture kwargs) and assert <code>"executor"</code> is absent from every captured entry. This pattern is already used in <code>tests/test_skills.py</code> and should be the standard for all community-contributed skill tests.</li>
+<li><strong>Assert executor not called</strong> on non-ALLOW verdicts.</li>
+<li><strong>Assert return value</strong> — the skill returns whatever the executor returns on ALLOW.</li>
+</ul>
+<hr />
+<h2 id="pull-request-checklist">Pull Request Checklist<a class="headerlink" href="#pull-request-checklist" title="Permanent link">&para;</a></h2>
+<p>Review this checklist before opening a PR.</p>
+<h3 id="for-all-prs">For All PRs<a class="headerlink" href="#for-all-prs" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Change is focused and clearly scoped</li>
+<li>[ ] Code is formatted (<code>black</code>) and linted (<code>ruff</code>) locally</li>
+<li>[ ] All tests pass locally (<code>pytest</code>)</li>
+<li>[ ] Relevant documentation is updated</li>
+<li>[ ] <code>CHANGELOG.md</code> is updated if appropriate</li>
+</ul>
+<h3 id="for-new-skills-in-addition-to-the-above">For New Skills (in addition to the above)<a class="headerlink" href="#for-new-skills-in-addition-to-the-above" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Skill governs a narrow, consequential action</li>
+<li>[ ] Skill is action-category based, not vendor-branded</li>
+<li>[ ] <code>skill_id</code> uses <code>&lt;category&gt;.&lt;action&gt;</code> naming</li>
+<li>[ ] <code>agent_id: str</code> is the first parameter</li>
+<li>[ ] Call-time signature contains only plain data parameters</li>
+<li>[ ] Executor callables are injected at factory time, not call time</li>
+<li>[ ] Implementation follows the correct pattern (A or B above)</li>
+<li>[ ] Docstring explains governance-relevant parameters clearly</li>
+<li>[ ] Tests cover ALLOW, BLOCK, and ESCALATE verdict paths</li>
+<li>[ ] Tests verify executor is not called on non-ALLOW verdicts</li>
+<li>[ ] Tests verify executor-related objects are absent from engine kwargs</li>
+<li>[ ] No live external API calls are made in tests</li>
+</ul>
+<hr />
+<h2 id="good-skill-ideas">Good Skill Ideas<a class="headerlink" href="#good-skill-ideas" title="Permanent link">&para;</a></h2>
+<p>The skills library focuses on horizontal action categories that apply across industries. The current set covers finance, filesystem, comms, and web. If you see a broadly applicable risk category that is missing, open an issue with the proposed skill signature and example policies — we'd love to discuss it.</p>
+<p>Domain-specific skills (e.g. trading, healthcare, legal) are best built in your own codebase using the same patterns documented above. The decorator and engine support any skill — the community library focuses on broadly applicable actions.</p>
+<h2 id="what-not-to-submit">What Not to Submit<a class="headerlink" href="#what-not-to-submit" title="Permanent link">&para;</a></h2>
+<p>Please do not open PRs for:</p>
+<ul>
+<li>Broad "god skills" that wrap many unrelated actions</li>
+<li>Vendor-specific wrappers presented as core skills (e.g. <code>stripe.charge</code> instead of <code>finance.charge</code>)</li>
+<li>Skills with no obvious policy surface</li>
+<li>Skills that hide governance-relevant parameters inside opaque blobs</li>
+<li>Large refactors mixed together with unrelated feature work</li>
+</ul>
+<h2 id="questions">Questions<a class="headerlink" href="#questions" title="Permanent link">&para;</a></h2>
+<p>If you are unsure whether something should be a skill, open an issue with:</p>
+<ol>
+<li>The action you want to govern</li>
+<li>Why it is consequential</li>
+<li>The proposed function signature</li>
+<li>The proposed <code>skill_id</code></li>
+<li>Example deterministic and semantic policies you'd expect users to write</li>
+</ol>
+<p>That is usually enough to review the fit quickly.</p>
+<h2 id="licensing">Licensing<a class="headerlink" href="#licensing" title="Permanent link">&para;</a></h2>
+<p>This project is licensed under MIT. By submitting a pull request, you certify that your contribution is your own original work and that you have the right to submit it under the project's license, in accordance with the <a href="https://developercertificate.org/">Developer Certificate of Origin</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "navigation.top", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
