@@ -46,7 +46,7 @@ The distinction between BLOCK and ESCALATE is intentional. Some limits should ne
 
 Policies are defined as an ordered list and evaluated in sequence — the engine short-circuits on the first breach. Each policy produces one of the three verdicts above.
 
-**Deterministic policies** are hard, rule-based checks — cumulative (block if spend in the last 4 hours exceeds \$50), per-call (block if a single charge exceeds \$500), or set-based (escalate if a write targets a protected directory).
+**Deterministic policies** are hard, rule-based checks — cumulative (block if total spend exceeds \$50), per-call (block if a single charge exceeds \$500), or set-based (escalate if a write targets a protected directory).
 
 **Semantic policies** are natural language rules evaluated by a separate LLM you provide — "Escalate if the email tone appears aggressive." Same verdict system. No hidden calls. Your model, your rules.
 
@@ -131,3 +131,12 @@ Open `.limenex/state.json` to inspect recorded state at any time:
 ```
 
 > For a full worked example — agent intent, escalation handling, approval loop, and integration with LangGraph — see [`examples/langgraph_example.ipynb`](examples/).
+ 
+---
+## Contributing
+
+We welcome contributions — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## License
+
+Limenex is licensed under the [MIT License](LICENSE).
