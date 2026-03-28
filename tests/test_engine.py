@@ -215,13 +215,51 @@ def test_deterministic_policy_warns_on_fractional_eq_value() -> None:
 
 
 # ---------------------------------------------------------------------------
+# DeterministicPolicy construction: stateful flag validation
+# ---------------------------------------------------------------------------
+
+
+def test_deterministic_policy_stateful_false_with_param_none_raises_at_construction() -> (
+    None
+):
+    """stateful=False + param=None is a build-time guard, not evaluation-time."""
+    with pytest.raises(ValueError, match="stateful=False requires 'param' to be set"):
+        DeterministicPolicy(
+            dimension="single_charge_limit",
+            operator="lt",
+            value=500.0,
+            param=None,
+            breach_verdict="BLOCK",
+            stateful=False,
+        )
+
+
+def test_deterministic_policy_stateful_false_on_set_operator_raises_at_construction() -> (
+    None
+):
+    """stateful=False is meaningless on set operators — rejected at construction."""
+    with pytest.raises(ValueError, match="inherently stateless"):
+        DeterministicPolicy(
+            dimension="allowed_filepaths",
+            operator="in",
+            values=frozenset({"/tmp"}),
+            param="filepath",
+            breach_verdict="BLOCK",
+            stateful=False,
+        )
+
+
+# ---------------------------------------------------------------------------
 # Engine: numeric deterministic evaluation
 # ---------------------------------------------------------------------------
 
 
 async def test_engine_allows_when_policy_config_empty() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", LimenexConfigWarning)
+        config = PolicyConfig()
     engine = PolicyEngine(
-        policy_store=InMemoryPolicyStore({"finance.charge": PolicyConfig()}),
+        policy_store=InMemoryPolicyStore({"finance.charge": config}),
         state_store=SpyStateStore(),
     )
 
@@ -411,6 +449,189 @@ async def test_engine_record_persists_numeric_targets() -> None:
         ("agent-1", "4h_spend", 12.5),
         ("agent-1", "daily_calls", 1.0),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Engine: stateless numeric evaluation
+# ---------------------------------------------------------------------------
+
+
+async def test_engine_stateless_numeric_policy_allows_when_under_threshold() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="single_charge_limit",
+                            operator="lt",
+                            value=500.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                            stateful=False,
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 100.0},
+    )
+
+    assert result.verdict == "ALLOW"
+    assert result.triggered_by is None
+
+
+async def test_engine_stateless_numeric_policy_blocks_when_over_threshold() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="single_charge_limit",
+                            operator="lt",
+                            value=500.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                            stateful=False,
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 600.0},
+    )
+
+    assert result.verdict == "BLOCK"
+    assert isinstance(result.triggered_by, DeterministicPolicy)
+    assert result._record_targets == []
+
+
+async def test_engine_stateless_numeric_policy_produces_no_record_targets() -> None:
+    store = SpyStateStore()
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="single_charge_limit",
+                            operator="lt",
+                            value=500.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                            stateful=False,
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 100.0},
+    )
+
+    assert result.verdict == "ALLOW"
+    assert result._record_targets == []
+
+
+async def test_engine_stateless_numeric_policy_never_reads_state_store() -> None:
+    store = SpyStateStore({("agent-1", "single_charge_limit"): 9999.0})
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="single_charge_limit",
+                            operator="lt",
+                            value=500.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                            stateful=False,
+                        )
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 100.0},
+    )
+
+    assert result.verdict == "ALLOW"
+    assert store.get_calls == []
+
+
+async def test_engine_mixed_stateless_and_stateful_policies_record_only_stateful() -> (
+    None
+):
+    """Realistic scenario: single charge < $500 (stateless) followed by
+    cumulative spend < $1000 (stateful). Both pass. Only the stateful
+    policy should contribute to _record_targets."""
+    store = SpyStateStore({("agent-1", "cumulative_spend"): 200.0})
+    engine = PolicyEngine(
+        policy_store=InMemoryPolicyStore(
+            {
+                "finance.charge": PolicyConfig(
+                    policies=[
+                        DeterministicPolicy(
+                            dimension="single_charge_limit",
+                            operator="lt",
+                            value=500.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                            stateful=False,
+                        ),
+                        DeterministicPolicy(
+                            dimension="cumulative_spend",
+                            operator="lt",
+                            value=1000.0,
+                            param="amount",
+                            breach_verdict="BLOCK",
+                            stateful=True,
+                        ),
+                    ]
+                )
+            }
+        ),
+        state_store=store,
+    )
+
+    result = await engine.evaluate(
+        skill_id="finance.charge",
+        agent_id="agent-1",
+        kwargs={"amount": 100.0},
+    )
+
+    assert result.verdict == "ALLOW"
+    assert result._record_targets == [("cumulative_spend", 100.0)]
+    assert ("agent-1", "single_charge_limit") not in [
+        (call[0], call[1]) for call in store.get_calls
+    ]
+    assert store.get_calls == [("agent-1", "cumulative_spend")]
 
 
 # ---------------------------------------------------------------------------

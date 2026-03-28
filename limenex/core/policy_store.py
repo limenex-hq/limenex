@@ -4,7 +4,6 @@ policy_store.py — Local file-backed implementation of PolicyStore.
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 from typing import Any
 
@@ -48,8 +47,15 @@ class LocalFilePolicyStore:
               dimension: <string>
               operator: <lt|lte|gt|gte|eq|neq>
               value: <number>
-              param: <string>          # optional
+              param: <string>          # optional (required when stateful is false)
               breach_verdict: <BLOCK|ESCALATE>
+              stateful: <bool>         # optional, defaults to true
+
+            When stateful is false, the engine evaluates the raw param value
+            directly against `value` with no state accumulation — no
+            StateStore read, no write. Appropriate for per-call limits
+            (e.g. single charge caps). `param` is mandatory when stateful
+            is false. `dimension` serves as a human-readable label only.
 
         Set membership operators (in, not_in):
             - type: deterministic
@@ -60,6 +66,10 @@ class LocalFilePolicyStore:
                 - <string>
               param: <string>          # required
               breach_verdict: <BLOCK|ESCALATE>
+
+            Set operators are inherently stateless. Do not specify
+            stateful: false on set-operator policies — it will raise
+            a ValueError.
 
         Values are taken exactly as parsed from YAML — no trimming,
         normalisation, or case folding is applied. Ensure values match
@@ -97,10 +107,7 @@ class LocalFilePolicyStore:
             UnregisteredSkillError: skill_id not found in loaded configs.
         """
         if skill_id not in self._configs:
-            raise UnregisteredSkillError(
-                f"No policy configuration found for skill_id '{skill_id}'. "
-                f"Ensure it is declared in your policies YAML file."
-            )
+            raise UnregisteredSkillError(skill_id)
         return self._configs[skill_id]
 
     # ------------------------------------------------------------------
@@ -165,6 +172,13 @@ class LocalFilePolicyStore:
 
         all_skills = sorted(set(parent) | set(child))
         for skill_id in all_skills:
+            for source_name, source in (("parent", parent), ("child", child)):
+                if skill_id in source and not isinstance(source[skill_id], dict):
+                    raise ValueError(
+                        f"Skill '{skill_id}' in {source_name} policy file must be "
+                        f"a YAML mapping, got {type(source[skill_id]).__name__}."
+                    )
+
             if skill_id in parent and skill_id in child:
                 parent_policies = parent[skill_id].get("policies", [])
                 child_policies = child[skill_id].get("policies", [])
@@ -180,15 +194,21 @@ class LocalFilePolicyStore:
         """Deserialise a single skill's raw YAML dict into a PolicyConfig."""
         raw_policies = data.get("policies", [])
 
-        if not raw_policies:
-            warnings.warn(
-                f"Skill '{skill_id}' has an empty policies list. "
-                f"All calls will be ALLOW by default.",
-                stacklevel=4,
+        if not isinstance(raw_policies, list):
+            raise ValueError(
+                f"Skill '{skill_id}' must define 'policies' as a YAML list, "
+                f"got {type(raw_policies).__name__}."
             )
 
         policies = []
         for i, raw in enumerate(raw_policies):
+            if not isinstance(raw, dict):
+                raise ValueError(
+                    f"Invalid policy at index {i} for skill '{skill_id}': "
+                    f"each policy entry must be a YAML mapping, got "
+                    f"{type(raw).__name__}."
+                )
+
             policy_type = raw.get("type")
 
             if policy_type == "deterministic":
@@ -227,7 +247,8 @@ class LocalFilePolicyStore:
         Branches on operator family:
           - Set operators (in, not_in): expects 'values' list, no 'value'.
           - Numeric operators (lt, lte, gt, gte, eq, neq): expects 'value'
-            float, no 'values'.
+            float, no 'values'. Optionally accepts 'stateful' (bool,
+            defaults to true).
 
         Raises ValueError with a clear message if the wrong field is
         supplied for the declared operator, if required fields are absent,
@@ -235,7 +256,8 @@ class LocalFilePolicyStore:
         iteration from frozenset(string)).
 
         DeterministicPolicy.__post_init__ handles deeper validation
-        (frozenset type, string items, finite float, etc.).
+        (frozenset type, string items, finite float, stateful + param
+        interaction, etc.).
         """
         try:
             operator = raw["operator"]
@@ -244,6 +266,16 @@ class LocalFilePolicyStore:
                 f"Invalid deterministic policy at index {index} for skill "
                 f"'{skill_id}': missing required field 'operator'."
             ) from exc
+
+        # Validate stateful is a bool if provided (guards against YAML
+        # string "false" which is truthy in Python).
+        stateful = raw.get("stateful", True)
+        if not isinstance(stateful, bool):
+            raise ValueError(
+                f"Invalid deterministic policy at index {index} for skill "
+                f"'{skill_id}': 'stateful' must be a boolean, got "
+                f"{type(stateful).__name__!r}."
+            )
 
         if operator in _SET_OPERATOR_FNS:
             # Set membership path — requires 'values' list, forbids 'value'.
@@ -271,6 +303,7 @@ class LocalFilePolicyStore:
                     values=frozenset(raw_values),
                     param=raw.get("param"),
                     breach_verdict=raw["breach_verdict"],
+                    stateful=stateful,
                 )
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(
@@ -296,6 +329,7 @@ class LocalFilePolicyStore:
                     value=float(raw["value"]),
                     param=raw.get("param"),
                     breach_verdict=raw["breach_verdict"],
+                    stateful=stateful,
                 )
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError(

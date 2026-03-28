@@ -128,12 +128,25 @@ class DeterministicPolicy:
         Evaluates a state dimension from the StateStore against a numeric
         threshold. `value` is required; `values` must be None.
 
-        Projective check: when `param` is set, the engine evaluates
-        (current_value + proposed_value) where proposed_value is extracted
-        from the named function argument. The same value is passed to
-        StateStore.record() after successful execution. When `param` is None,
-        the check is non-projective and StateStore.record() is called with
-        value=1.0 (count increment).
+        Behaviour depends on the `stateful` flag:
+
+        **stateful=True** (default, projective cumulative check):
+            The engine reads cumulative state from the StateStore, adds the
+            proposed value from `param` (if set), and evaluates the sum
+            against `value`. After successful execution, the proposed
+            value is recorded to the StateStore via record(). When `param`
+            is None, the check is non-projective (current state only) and
+            record() is called with value=1.0 (count increment).
+
+        **stateful=False** (per-call raw value check):
+            The engine evaluates kwargs[param] directly against `value`
+            with no StateStore interaction — no read, no write. This is
+            appropriate for per-call limits such as "single charge must be
+            under $500" where cumulative tracking is not desired. `param`
+            is mandatory when stateful=False (a stateless policy with no
+            param has no value to evaluate). The `dimension` field serves
+            as a human-readable label only — it appears in error messages
+            and EvaluationResult.triggered_by but has no storage role.
 
         eq/neq use exact float comparison — only use with integer-equivalent
         values (e.g. 1.0, 0.0). Use lt/lte/gt/gte for fractional thresholds.
@@ -141,6 +154,11 @@ class DeterministicPolicy:
     **Set membership operators** (in, not_in):
         Evaluates whether kwargs[param] is a member of the defined string set.
         `values` is required; `value` must be None; `param` is mandatory.
+
+        Set operators are inherently stateless — they never read from or
+        write to the StateStore regardless of configuration. The `stateful`
+        flag must not be set to False on set-operator policies; doing so
+        raises a ValueError because the flag is meaningless in this context.
 
         Matching is exact and case-sensitive: "/Workspace" is NOT considered
         in {"/workspace", "/tmp"}. Domain or suffix extraction is out of scope
@@ -158,17 +176,29 @@ class DeterministicPolicy:
         is emitted at construction time when `values` is empty.
 
     Args:
-        dimension:      StateStore key (numeric operators) or human-readable
-                        label (set operators). User-defined, any string is valid.
+        dimension:      StateStore key (stateful numeric operators) or
+                        human-readable label (stateless numeric operators
+                        and set operators). User-defined, any string is valid.
+                        When stateful=False, dimension has no storage role —
+                        it appears in error messages and
+                        EvaluationResult.triggered_by only.
         operator:       One of: "lt", "lte", "gt", "gte", "eq", "neq",
                         "in", "not_in".
         value:          Finite numeric threshold. Required for numeric operators;
                         must be None for set operators.
         param:          Function argument name mapped to this dimension.
                         Required for set operators (hard error if absent).
-                        Optional (None) for count-based numeric checks.
+                        Required when stateful=False (hard error if absent).
+                        Optional (None) for stateful count-based numeric checks.
         breach_verdict: Verdict when condition is not satisfied.
                         Must be "BLOCK" or "ESCALATE". Default: "ESCALATE".
+        stateful:       Whether the engine should read/write StateStore for
+                        this policy. Default: True. When False, the engine
+                        evaluates kwargs[param] directly against the threshold
+                        with no state accumulation — appropriate for per-call
+                        limits. Must not be False for set operators (raises
+                        ValueError). Must not be False when param is None
+                        (raises ValueError).
         values:         Frozenset of exact strings for membership evaluation.
                         Required for set operators; must be None for numeric
                         operators. Must be a frozenset — lists and mutable sets
@@ -179,6 +209,12 @@ class DeterministicPolicy:
             dimension="4h_finance_spend",
             operator="lt", value=50.0, param="amount",
             breach_verdict="BLOCK",
+        )
+        DeterministicPolicy(                      # per-call spend cap (stateless)
+            dimension="single_charge_limit",
+            operator="lt", value=500.0, param="amount",
+            breach_verdict="BLOCK",
+            stateful=False,
         )
         DeterministicPolicy(                      # count check
             dimension="daily_api_calls",
@@ -205,6 +241,7 @@ class DeterministicPolicy:
     value: float | None = None
     param: str | None = None
     breach_verdict: BreachVerdict = "ESCALATE"
+    stateful: bool = True
     values: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
@@ -259,6 +296,14 @@ class DeterministicPolicy:
                     stacklevel=3,
                 )
 
+            # --- stateful validation (numeric only) ---
+            if not self.stateful and self.param is None:
+                raise ValueError(
+                    "stateful=False requires 'param' to be set. A stateless "
+                    "policy with no param has no value to evaluate — the engine "
+                    "would have nothing to check against the threshold."
+                )
+
         else:
             # Set membership branch (in, not_in)
             if self.value is not None:
@@ -297,6 +342,15 @@ class DeterministicPolicy:
                     f"This is almost certainly a misconfiguration.",
                     LimenexConfigWarning,
                     stacklevel=3,
+                )
+
+            # --- stateful validation (set operators) ---
+            if not self.stateful:
+                raise ValueError(
+                    f"Set operator '{self.operator}' is inherently stateless — "
+                    f"it never reads from or writes to the StateStore. "
+                    f"Setting stateful=False is meaningless and not allowed. "
+                    f"Remove the stateful=False argument."
                 )
 
 

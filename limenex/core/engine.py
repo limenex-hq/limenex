@@ -128,8 +128,10 @@ class EvaluationResult:
                          persisted by engine.record() after successful
                          execution. Always empty when verdict is not ALLOW.
                          Set-operator policies never contribute to this list —
-                         they carry no state. Underscore-prefixed — not part
-                         of the public contract.
+                         they carry no state. Stateless numeric policies
+                         (stateful=False) also never contribute — they
+                         evaluate the raw param value with no accumulation.
+                         Underscore-prefixed — not part of the public contract.
     """
 
     verdict: Verdict
@@ -209,10 +211,19 @@ class PolicyEngine:
         Fetches PolicyConfig for skill_id, iterates the unified policy list
         in order, and short-circuits on the first non-ALLOW verdict.
 
-        For numeric DeterministicPolicy: reads and accumulates state via the
-        StateStore. For set-operator DeterministicPolicy: evaluates exact
-        string membership against policy.values — the StateStore is never
-        consulted and no state is recorded.
+        For numeric DeterministicPolicy with stateful=True: reads cumulative
+        state via StateStore, adds the proposed param value (projective
+        check), and evaluates the sum against `value`. On pass, appends to
+        _record_targets for later persistence via record().
+
+        For numeric DeterministicPolicy with stateful=False: evaluates
+        kwargs[param] directly against `value` — no StateStore read, no
+        write, no contribution to _record_targets. Appropriate for per-call
+        limits (e.g. single charge caps).
+
+        For set-operator DeterministicPolicy: evaluates exact string
+        membership against policy.values — the StateStore is never consulted
+        and no state is recorded.
 
         Args:
             skill_id:  The registered skill identifier.
@@ -279,7 +290,7 @@ class PolicyEngine:
 
                 else:
                     # ----------------------------------------------------------
-                    # Numeric path (lt, lte, gt, gte, eq, neq) — unchanged.
+                    # Numeric path (lt, lte, gt, gte, eq, neq)
                     # ----------------------------------------------------------
                     if policy.param is not None and policy.param not in kwargs:
                         raise LimenexConfigError(
@@ -299,32 +310,62 @@ class PolicyEngine:
                                 f"{kwargs[policy.param]!r} could not be cast to float."
                             ) from exc
 
-                    if self._state_store_get_is_async:
-                        current = await cast(AsyncStateStore, self._state_store).get(
-                            agent_id, policy.dimension
+                    if policy.stateful:
+                        # --------------------------------------------------
+                        # Stateful: projective cumulative check.
+                        # Read current accumulated state, add proposed value
+                        # (if param set), evaluate sum against policy.value.
+                        # On pass, record (dimension, value) for persistence.
+                        # --------------------------------------------------
+                        if self._state_store_get_is_async:
+                            current = await cast(
+                                AsyncStateStore, self._state_store
+                            ).get(agent_id, policy.dimension)
+                        else:
+                            current = cast(StateStore, self._state_store).get(
+                                agent_id, policy.dimension
+                            )
+
+                        check_value = (
+                            (current + proposed) if proposed is not None else current
                         )
+
+                        if not _NUMERIC_OPERATOR_FNS[policy.operator](
+                            check_value, policy.value
+                        ):
+                            return EvaluationResult(
+                                verdict=policy.breach_verdict,
+                                skill_id=skill_id,
+                                agent_id=agent_id,
+                                triggered_by=policy,
+                            )
+
+                        record_targets.append(
+                            (
+                                policy.dimension,
+                                proposed if proposed is not None else 1.0,
+                            )
+                        )
+
                     else:
-                        current = cast(StateStore, self._state_store).get(
-                            agent_id, policy.dimension
-                        )
-
-                    check_value = (
-                        (current + proposed) if proposed is not None else current
-                    )
-
-                    if not _NUMERIC_OPERATOR_FNS[policy.operator](
-                        check_value, policy.value
-                    ):
-                        return EvaluationResult(
-                            verdict=policy.breach_verdict,
-                            skill_id=skill_id,
-                            agent_id=agent_id,
-                            triggered_by=policy,
-                        )
-
-                    record_targets.append(
-                        (policy.dimension, proposed if proposed is not None else 1.0)
-                    )
+                        # --------------------------------------------------
+                        # Stateless: per-call raw value check.
+                        # Evaluate kwargs[param] directly against
+                        # policy.value — no StateStore read, no write.
+                        # param is guaranteed non-None by __post_init__,
+                        # so proposed is always set at this point.
+                        # Does not contribute to record_targets.
+                        # --------------------------------------------------
+                        assert proposed is not None
+                        if not _NUMERIC_OPERATOR_FNS[policy.operator](
+                            proposed, policy.value
+                        ):
+                            return EvaluationResult(
+                                verdict=policy.breach_verdict,
+                                skill_id=skill_id,
+                                agent_id=agent_id,
+                                triggered_by=policy,
+                            )
 
             elif isinstance(policy, SemanticPolicy):
                 if self._llm_evaluator is None:
@@ -370,8 +411,9 @@ class PolicyEngine:
         on BLOCK or ESCALATE — the invariants on EvaluationResult enforce this
         structurally (_record_targets is always empty for non-ALLOW results).
 
-        Set-operator policies never contribute to _record_targets and are
-        therefore transparent to this method — no special handling required.
+        Set-operator policies and stateless numeric policies (stateful=False)
+        never contribute to _record_targets and are therefore transparent to
+        this method — no special handling required.
 
         Args:
             result: The EvaluationResult returned by evaluate().
