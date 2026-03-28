@@ -130,13 +130,13 @@ Open `.limenex/state.json` to inspect recorded state at any time:
 }
 ```
 
-> For a full worked example — agent intent, escalation handling, approval loop, and integration with LangGraph — see [`examples/langgraph_example.ipynb`](examples/).
+> For a full worked example — agent intent, escalation handling, approval loop, and integration with LangGraph — see [`examples/langgraph_example.ipynb`](https://github.com/limenex-hq/limenex/tree/main/examples).
  
 ---
 ## Contributing
 
-We welcome contributions — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions — see [CONTRIBUTING.md](contributing.md) for guidelines.
 
 ## License
 
-Limenex is licensed under the [MIT License](LICENSE).
+Limenex is licensed under the [MIT License](https://github.com/limenex-hq/limenex).
