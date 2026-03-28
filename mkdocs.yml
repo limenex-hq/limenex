@@ -1,0 +1,47 @@
+site_name: Limenex
+site_url: https://limenex.dev/
+site_description: Deterministic governance for AI agents and agentic systems
+repo_url: https://github.com/limenex-hq/limenex
+repo_name: limenex-hq/limenex
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: black
+      accent: lime
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: lime
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Contributing: contributing.md
