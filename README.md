@@ -55,3 +55,79 @@ Policies are defined as an ordered list and evaluated in sequence — the engine
 A skill is a governed wrapper around a single consequential action — charging a payment, writing a file, sending a message. Not every function call needs one. Only the ones that carry real risk.
 
 Skills are vendor-agnostic: `filesystem.write` is named after what it does, not which library executes it. You inject the executor; Limenex governs whether it runs.
+
+---
+## Quickstart
+
+Install Limenex:
+
+```bash
+pip install limenex
+```
+
+Create `.limenex/policies.yaml`:
+
+```yaml
+finance.spend:
+  policies:
+    - type: deterministic
+      dimension: spend_usd
+      operator: lt
+      value: 50.0
+      param: amount_usd
+      breach_verdict: ESCALATE
+```
+
+Wire up the skill at application startup:
+
+```python
+import asyncio
+from limenex.core.engine import PolicyEngine, EscalationRequired
+from limenex.core.policy_store import LocalFilePolicyStore
+from limenex.core.stores import LocalFileStateStore
+from limenex.skills.finance import make_spend
+
+policy_store = LocalFilePolicyStore(".limenex/policies.yaml")
+state_store  = LocalFileStateStore(".limenex/state.json")
+engine       = PolicyEngine(
+    policy_store=policy_store, 
+    state_store=state_store,
+)
+
+# Your payment executor — injected once at startup
+async def my_payment_executor(amount_usd: float):
+    print(f"Payment of ${amount_usd:.2f} sent")
+
+spend = make_spend(
+    engine, 
+    registry={
+        "acme-payments": my_payment_executor,
+    }
+)
+
+# Expose to your LLM agent as a tool — plain data parameters only:
+# spend(service: str, amount_usd: float)
+
+async def main():
+    try:
+        await spend(agent_id="agent-1", service="acme-payments", amount_usd=30.0)   # ✓ runs
+        await spend(agent_id="agent-1", service="acme-payments", amount_usd=30.0)   # ✗ escalates
+    except EscalationRequired:
+        print("Action paused — agent-1 has hit the spend limit.")
+
+asyncio.run(main())
+```
+
+The first call executes and Limenex records `$30` against `agent-1` in `.limenex/state.json`. The second call never reaches the executor — the engine evaluates `$30 (recorded) + $30 (proposed) = $60`, sees it would breach the `< $50` limit, and raises `EscalationRequired` before execution.
+
+Open `.limenex/state.json` to inspect recorded state at any time:
+
+```json
+{
+  "spend_usd": {
+    "agent-1": 30.0
+  }
+}
+```
+
+> For a full worked example — agent intent, escalation handling, approval loop, and integration with LangGraph — see [`examples/trading_assistant.py`](examples/).
