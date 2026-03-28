@@ -130,4 +130,4 @@ Open `.limenex/state.json` to inspect recorded state at any time:
 }
 ```
 
-> For a full worked example — agent intent, escalation handling, approval loop, and integration with LangGraph — see [`examples/trading_assistant.py`](examples/).
+> For a full worked example — agent intent, escalation handling, approval loop, and integration with LangGraph — see [`examples/langgraph_example.ipynb`](examples/).
