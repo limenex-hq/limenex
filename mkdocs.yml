@@ -25,6 +25,10 @@ theme:
     - navigation.top
     - content.code.copy
 
+plugins:
+  - search
+  - blog
+    
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
@@ -44,4 +48,5 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Blog: blog/index.md
   - Contributing: contributing.md
