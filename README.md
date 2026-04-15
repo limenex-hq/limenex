@@ -139,4 +139,4 @@ We welcome contributions — see [CONTRIBUTING.md](contributing.md) for guidelin
 
 ## License
 
-Limenex is licensed under the [MIT License](https://github.com/limenex-hq/limenex).
+Limenex is licensed under the [Apache License 2.0](https://github.com/limenex-hq/limenex/blob/main/LICENSE).

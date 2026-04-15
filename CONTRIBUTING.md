@@ -394,4 +394,4 @@ That is usually enough to review the fit quickly.
 
 ## Licensing
 
-This project is licensed under MIT. By submitting a pull request, you certify that your contribution is your own original work and that you have the right to submit it under the project's license, in accordance with the [Developer Certificate of Origin](https://developercertificate.org/).
+This project is licensed under Apache 2.0. By submitting a pull request, you certify that your contribution is your own original work and that you have the right to submit it under the project's license, in accordance with the [Developer Certificate of Origin](https://developercertificate.org/).
