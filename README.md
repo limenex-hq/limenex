@@ -78,6 +78,15 @@ finance.spend:
       breach_verdict: ESCALATE
 ```
 
+Validate it before wiring anything up:
+
+```bash
+python -m limenex validate
+# ✓ Valid — 1 skill, 1 policy (1 deterministic, 0 semantic)
+```
+
+The `validate` command loads your YAML through the same code path used at runtime, so any typo or misconfiguration surfaces immediately instead of on first agent call. Pass a path explicitly if yours lives elsewhere: `python -m limenex validate config/policies.yaml`.
+
 Wire up the skill at application startup:
 
 ```python
