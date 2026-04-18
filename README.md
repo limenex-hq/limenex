@@ -1,11 +1,13 @@
 # Limenex
-### Deterministic governance for AI agents and agentic systems
+### Deterministic stateful governance for AI agents and agentic systems
 
 The safety instructions in your agentic system live in the same context window as a prompt injection attack. One of them will win — and it won't always be yours.
 
 Without an enforcement layer outside the model, a single malicious input can drain an account, exfiltrate credentials, or delete production data.
 
 **Limenex** is a deterministic enforcement layer between your agent and the real world. A lightweight policy engine that intercepts every consequential action before execution — blocking, escalating, or allowing it based on rules the model cannot override.
+
+*Stateful* by design, Limenex tracks cumulative state across calls — it catches the 50th $10 charge, not just a single \$500 one.
 
 Wire it once at startup. Zero changes to your agent logic or executors.
 
