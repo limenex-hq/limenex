@@ -146,7 +146,7 @@ Open `.limenex/state.json` to inspect recorded state at any time:
 ---
 ## Contributing
 
-We welcome contributions — see [CONTRIBUTING.md](contributing.md) for guidelines.
+We welcome contributions — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
