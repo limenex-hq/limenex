@@ -134,8 +134,8 @@ from langchain_core.tools import tool
 
 @tool
 async def top_up_openai_credits(amount_usd: float) -> str:
-    \"\"\"Top up OpenAI API credits. Governed by Limenex — subject to
-    per-call and cumulative spend limits.\"\"\"
+    """Top up OpenAI API credits. Governed by Limenex — subject to
+    per-call and cumulative spend limits."""
     try:
         await spend(agent_id=AGENT_ID, service="openai", amount_usd=amount_usd)
         return f"Topped up ${amount_usd:.2f} successfully."
