@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import yaml
+
 from .core.policy import DeterministicPolicy, PolicyConfig, SemanticPolicy
 from .core.policy_store import LocalFilePolicyStore
 
@@ -36,7 +38,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         return 1
     try:
         store = LocalFilePolicyStore(path)
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileNotFoundError, ValueError, yaml.YAMLError) as exc:
         print(f"✗ Invalid — {exc}", file=sys.stderr)
         return 1
 

@@ -117,3 +117,11 @@ finance.spend:
 def test_cli_entry_point_requires_subcommand(capsys):
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_validate_malformed_yaml(tmp_path, capsys):
+    """Malformed YAML (syntax errors, not just invalid config) should exit 1 with a clean message."""
+    policies = _write_policies(tmp_path, "not: valid: yaml: [unclosed")
+    assert main(["validate", str(policies)]) == 1
+    err = capsys.readouterr().err
+    assert "✗ Invalid" in err
