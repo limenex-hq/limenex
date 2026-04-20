@@ -6,6 +6,10 @@ build-backend = "hatchling.build"
 name = "limenex"
 version = "0.1.0"
 description = "Agentic AI execution governance layer"
+readme = "README.md"
+authors = [
+    { name = "Dennis Wong", email = "hello@limenex.dev" },
+]
 license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -37,3 +41,10 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+
+[project.urls]
+Homepage      = "https://limenex.dev"
+Documentation = "https://limenex.dev"
+Repository    = "https://github.com/limenex-hq/limenex"
+Issues        = "https://github.com/limenex-hq/limenex/issues"
+Changelog     = "https://github.com/limenex-hq/limenex/blob/main/CHANGELOG.md"
