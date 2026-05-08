@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 0.2.0
 
 ### Added
-- Skill Risk Analyser scaffolding (`limenex.analyzer`): subpackage skeleton, `limenex-analyze` console script, `httpx` and `rich` added as core dependencies.
+- Skill Risk Analyser scaffolding (`limenex.analyzer`): subpackage skeleton and `limenex-analyze` console script. Install with `pip install "limenex[analyzer]"`.
+- New `analyzer` optional-dependency group (`httpx`, `rich`). Core `pip install limenex` is unchanged in dependency footprint.
 
 ### Changed
 - Bumped version to `0.2.0.dev0`.
