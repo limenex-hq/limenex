@@ -22,9 +22,14 @@ change is introduced.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
+
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 from limenex import __version__ as _LIMENEX_VERSION
 
@@ -255,7 +260,7 @@ class SkillExposure:
 class SkillAnalysisError:
     """A per-skill failure captured during ``analyze_directory``.
 
-    Single-skill failures do not abort the run (A.7.2) — they are
+    Single-skill failures do not abort the run — they are
     collected here so the report is complete and the user knows which
     skills were not analyzed.
     """
@@ -331,3 +336,58 @@ class AnalysisReport:
             skills=[SkillExposure.from_dict(s) for s in data["skills"]],
             errors=[SkillAnalysisError.from_dict(e) for e in data.get("errors", [])],
         )
+
+
+_SCHEMA_PATH = Path(__file__).parent / "schemas" / "v1.json"
+
+
+def _load_schema() -> dict[str, Any]:
+    with _SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+_SCHEMA_CACHE: Optional[dict[str, Any]] = None
+_VALIDATOR_CACHE: Optional[Draft202012Validator] = None
+
+
+def _get_validator() -> Draft202012Validator:
+    global _SCHEMA_CACHE, _VALIDATOR_CACHE
+    if _VALIDATOR_CACHE is None:
+        _SCHEMA_CACHE = _load_schema()
+        _VALIDATOR_CACHE = Draft202012Validator(_SCHEMA_CACHE)
+    return _VALIDATOR_CACHE
+
+
+class ReportValidationError(ValueError):
+    """Raised when a dict fails validation against the analyzer report schema."""
+
+
+def validate_report(data: dict[str, Any]) -> AnalysisReport:
+    """Validate a raw dict against the analyzer report schema and return a typed report.
+
+    Parameters
+    ----------
+    data
+        Raw dictionary, typically from ``json.loads``.
+
+    Returns
+    -------
+    AnalysisReport
+        Typed report if validation succeeds.
+
+    Raises
+    ------
+    ReportValidationError
+        If the dict does not conform to the schema. The exception message
+        contains the validator's path into the document and a human-readable
+        description of the failure.
+    """
+    validator = _get_validator()
+    errors = sorted(validator.iter_errors(data), key=lambda e: list(e.absolute_path))
+    if errors:
+        first = errors[0]
+        path = "/".join(str(p) for p in first.absolute_path) or "<root>"
+        raise ReportValidationError(
+            f"Invalid analyzer report at {path}: {first.message}"
+        )
+    return AnalysisReport.from_dict(data)

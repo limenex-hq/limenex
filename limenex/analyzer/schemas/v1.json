@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://limenex.dev/schemas/analyzer/v1.json",
+  "title": "Limenex Analyzer Report",
+  "description": "Structured output of the Limenex Skill Risk Analyzer. Consumed by humans and by the limenex policy authoring flow; never by the runtime enforcement engine.",
+  "type": "object",
+  "required": [
+    "analyzer_version",
+    "analyzed_at",
+    "evaluator_fingerprint",
+    "skills",
+    "errors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "analyzer_version": {
+      "type": "string",
+      "description": "Version of the limenex package that produced the report."
+    },
+    "analyzed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp, UTC."
+    },
+    "evaluator_fingerprint": {
+      "$ref": "#/$defs/EvaluatorFingerprint"
+    },
+    "skills": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SkillExposure" }
+    },
+    "errors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SkillAnalysisError" }
+    }
+  },
+  "$defs": {
+    "EvaluatorFingerprint": {
+      "type": "object",
+      "required": ["model", "temperature", "prompt_template_hash"],
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string" },
+        "temperature": { "type": "number", "minimum": 0 },
+        "prompt_template_hash": { "type": "string" }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "required": ["category", "snippet", "file_path", "reasoning"],
+      "additionalProperties": false,
+      "properties": {
+        "category": { "type": "string" },
+        "snippet": { "type": "string" },
+        "file_path": { "type": "string" },
+        "reasoning": { "type": "string" },
+        "line_range": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "PolicyHint": {
+      "type": "object",
+      "required": ["type", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["deterministic", "semantic"] },
+        "verdict": { "type": "string", "enum": ["BLOCK", "ESCALATE"] },
+        "dimension": { "type": "string" },
+        "operator": { "type": "string" },
+        "value": {}
+      }
+    },
+    "PolicyScaffold": {
+      "type": "object",
+      "required": ["skill_id_hint", "policies"],
+      "additionalProperties": false,
+      "properties": {
+        "skill_id_hint": { "type": "string" },
+        "policies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PolicyHint" }
+        }
+      }
+    },
+    "Finding": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "type",
+        "severity",
+        "confidence",
+        "affected_components",
+        "evidence",
+        "recommendation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^(FIN|FS|COMM|WEB|INJ|POISON|SHADOW|DRIFT|FLOW|MISMATCH)[0-9]{3}$"
+        },
+        "type": { "type": "string", "enum": ["compromise", "capability_risk"] },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "affected_components": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "evidence": { "$ref": "#/$defs/Evidence" },
+        "recommendation": { "type": "string" },
+        "policy_scaffold": { "$ref": "#/$defs/PolicyScaffold" }
+      }
+    },
+    "SkillExposure": {
+      "type": "object",
+      "required": ["skill_name", "skill_path", "declared_purpose", "findings"],
+      "additionalProperties": false,
+      "properties": {
+        "skill_name": { "type": "string" },
+        "skill_path": { "type": "string" },
+        "declared_purpose": { "type": "string" },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Finding" }
+        }
+      }
+    },
+    "SkillAnalysisError": {
+      "type": "object",
+      "required": ["skill_name", "skill_path", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "skill_name": { "type": "string" },
+        "skill_path": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
