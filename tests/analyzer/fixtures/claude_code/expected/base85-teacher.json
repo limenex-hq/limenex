@@ -1,0 +1,6 @@
+{
+  "skill_name": "base85-teacher",
+  "skill_path": "tests/analyzer/fixtures/claude_code/skills/base85-teacher",
+  "declared_purpose": "Reference and demonstration material for the base85 encoding family (Ascii85, RFC 1924, Z85). Use when the user asks what base85 is, how it differs from base64, which alphabet variant to choose, why an encoded string is the length it is, or is debugging an unfamiliar base85-encoded blob and wants help identifying or decoding it.",
+  "findings": []
+}
