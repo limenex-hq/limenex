@@ -47,17 +47,22 @@ class EvaluatorFingerprint:
     Two reports are meaningfully comparable only when fingerprints match.
     ``temperature`` should be 0 for reproducible analysis; the provider
     defaults it to 0 and the docs recommend leaving it there.
+    ``framework`` identifies which skill framework's prompt variant was
+    used (e.g. ``"claude_code"``). Reports from different framework
+    variants use different prompts and are not cross-comparable.
     """
 
     model: str
     temperature: float
     prompt_template_hash: str
+    framework: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "model": self.model,
             "temperature": self.temperature,
             "prompt_template_hash": self.prompt_template_hash,
+            "framework": self.framework,
         }
 
     @classmethod
@@ -66,6 +71,7 @@ class EvaluatorFingerprint:
             model=data["model"],
             temperature=float(data["temperature"]),
             prompt_template_hash=data["prompt_template_hash"],
+            framework=data["framework"],
         )
 
 

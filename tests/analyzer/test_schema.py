@@ -43,6 +43,7 @@ def test_round_trip_construct_to_dict_validate_from_dict():
             model="gpt-4o-mini",
             temperature=0.0,
             prompt_template_hash="hash",
+            framework="claude_code",
         ),
         skills=[
             SkillExposure(
@@ -95,7 +96,7 @@ def test_round_trip_preserves_optional_omissions():
     """Optional fields omitted on construction stay omitted through the round trip."""
     report = AnalysisReport.create(
         evaluator_fingerprint=EvaluatorFingerprint(
-            model="m", temperature=0.0, prompt_template_hash="h"
+            model="m", temperature=0.0, prompt_template_hash="h", framework="claude_code"
         ),
         skills=[
             SkillExposure(

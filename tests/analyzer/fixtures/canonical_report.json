@@ -4,7 +4,8 @@
   "evaluator_fingerprint": {
     "model": "gpt-4o-mini",
     "temperature": 0.0,
-    "prompt_template_hash": "abc123def456"
+    "prompt_template_hash": "abc123def456",
+    "framework": "claude_code"
   },
   "skills": [
     {

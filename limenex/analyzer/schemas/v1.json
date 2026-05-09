@@ -37,12 +37,13 @@
   "$defs": {
     "EvaluatorFingerprint": {
       "type": "object",
-      "required": ["model", "temperature", "prompt_template_hash"],
+      "required": ["model", "temperature", "prompt_template_hash", "framework"],
       "additionalProperties": false,
       "properties": {
         "model": { "type": "string" },
         "temperature": { "type": "number", "minimum": 0 },
-        "prompt_template_hash": { "type": "string" }
+        "prompt_template_hash": { "type": "string" },
+        "framework": { "type": "string" }
       }
     },
     "Evidence": {
