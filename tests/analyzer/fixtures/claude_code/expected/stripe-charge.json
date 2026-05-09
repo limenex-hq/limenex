@@ -1,0 +1,23 @@
+{
+  "skill_name": "stripe-charge",
+  "skill_path": "tests/analyzer/fixtures/claude_code/skills/stripe-charge",
+  "declared_purpose": "Charge a Stripe customer a specified USD amount against their default saved payment source. Use when an operator needs to manually bill a known customer for a known one-off amount — e.g. a service fee, a manual invoice follow-up, or reconciling a recurring charge that was handled out-of-band. Requires the customer ID and the dollar amount; will not create customers, manage payment methods, or issue refunds.",
+  "findings": [
+    {
+      "rule_id": "FIN001",
+      "type": "capability_risk",
+      "severity": "high",
+      "confidence": "high",
+      "affected_components": [
+        "scripts/charge_customer.py"
+      ],
+      "evidence": {
+        "category": "FIN",
+        "snippet": "charge = stripe.Charge.create(\n    customer=customer_id,\n    amount=amount_cents,\n    currency=\"usd\",\n    description=f\"Manual back-office charge ({amount_arg} USD)\",",
+        "file_path": "scripts/charge_customer.py",
+        "reasoning": "The script invokes stripe.Charge.create against a user-supplied customer ID with a user-supplied amount, initiating a real debit against the customer's saved payment source. This is direct money movement and falls under the FIN (finance) capability category."
+      },
+      "recommendation": "Require policy approval on invocations of this skill. At minimum, enforce a per-invocation amount cap (e.g. an ESCALATE policy above a threshold); consider a BUDGET policy across cumulative charges per operator per time window. Block direct invocation on unfamiliar customer IDs."
+    }
+  ]
+}
