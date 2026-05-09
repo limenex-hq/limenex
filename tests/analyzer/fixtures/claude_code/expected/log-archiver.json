@@ -1,0 +1,39 @@
+{
+  "skill_name": "log-archiver",
+  "skill_path": "tests/analyzer/fixtures/claude_code/skills/log-archiver",
+  "declared_purpose": "Maintenance helper that walks a service's log directory, finds rotated log files older than a retention threshold, optionally uploads them to a configured S3 archive bucket, and then deletes them from disk. Use periodically (cron, systemd timer) on a host where a long-running service's log directory is filling the disk and you've already decided what your retention policy should be. Permanently deletes files; if an S3 archive bucket is configured, files are uploaded there first and only deleted on successful upload.",
+  "findings": [
+    {
+      "rule_id": "FS001",
+      "type": "capability_risk",
+      "severity": "high",
+      "confidence": "high",
+      "affected_components": [
+        "scripts/archive_logs.py"
+      ],
+      "evidence": {
+        "category": "FS",
+        "snippet": "os.remove(path)",
+        "file_path": "scripts/archive_logs.py",
+        "reasoning": "The script invokes os.remove on each file matched by the rotated-log pattern inside the operator-supplied --log-dir. This is destructive filesystem mutation outside the skill's own scratch space: files named by external input are permanently removed from disk. The target directory is CLI-controlled, not hardcoded, so the scope of deletion is bounded only by the filename pattern and the operator's typing. This falls under the FS (filesystem) capability category."
+      },
+      "recommendation": "Require policy approval for invocations of this skill. Consider a deterministic allowlist policy on --log-dir restricting the skill to a set of known service log directories (e.g. /var/log/acme-api, /var/log/acme-worker). Escalate on any invocation whose --log-dir resolves outside the allowlist. Separately, treat --retention-days below a minimum threshold (e.g. 7 days) as requiring human sign-off, since short retention combined with a wrong --log-dir compounds the blast radius."
+    },
+    {
+      "rule_id": "WEB001",
+      "type": "capability_risk",
+      "severity": "medium",
+      "confidence": "high",
+      "affected_components": [
+        "scripts/archive_logs.py"
+      ],
+      "evidence": {
+        "category": "WEB",
+        "snippet": "s3_client.upload_file(str(path), bucket, key)",
+        "file_path": "scripts/archive_logs.py",
+        "reasoning": "The script uploads matched files to an S3 bucket whose name is read directly from the S3_ARCHIVE_BUCKET environment variable, with a key prefix that is also externally influenced (via S3_KEY_PREFIX or LOG_SERVICE_NAME env vars, falling back to the log directory's basename). The destination is not hardcoded, not validated against an allowlist, and not constrained to a specific account — a single env var controls where file contents are sent. This is the canonical WEB threat model: outbound transfer to an externally-influenced destination. That the transport happens to be s3:// rather than https:// does not change the risk dimension."
+      },
+      "recommendation": "Apply a deterministic allowlist policy on S3_ARCHIVE_BUCKET, restricting it to buckets in a known AWS account under the organisation's control. Consider a policy that rejects invocations if the resolved bucket name doesn't match an expected pattern (e.g. \\\"^acme-logs-archive-[a-z0-9-]+$\\\"). Where possible, tighten the IAM role used for upload to s3:PutObject on specific allowed buckets only, so even a policy bypass at the skill layer is bounded by IAM."
+    }
+  ]
+}
