@@ -400,11 +400,20 @@ This plugin is a Claude Code skill. Key conventions:
   it as the primary source for MISMATCH analysis. If `description` is
   absent, fall back to the first descriptive sentence of the Markdown
   body.
-- The `allowed-tools` field lists the tool names (e.g. `Bash`, `Read`,
-  `Write`, `Edit`) the skill is permitted to invoke. A mismatch between
-  `allowed-tools` and the capabilities observed in scripts is a strong
-  MISMATCH signal: a skill that declares only `Read` but whose scripts
-  perform file writes or network posts is misrepresenting itself.
+- The `allowed-tools` field lists the Claude Code tools (e.g. `Read`,
+  `Write`, `Edit`, `Bash`, `WebFetch`) the skill permits Claude itself
+  to invoke. It does NOT constrain what scripts do internally once
+  invoked. A Python script called via `Bash` may open network sockets,
+  write files, or make API calls; none of that appears in
+  `allowed-tools` because Claude is not performing those actions
+  directly — the script is.
+- A tool-gap MISMATCH fires only when the `SKILL.md` body instructs
+  Claude to perform an action outside the declared `allowed-tools` set
+  — for example, the body tells Claude to fetch a URL but `WebFetch`
+  is not declared, or tells Claude to edit files but `Edit` is not
+  declared. Capabilities observed only inside referenced scripts are
+  evaluated against the skill's declared purpose (standard MISMATCH),
+  not against `allowed-tools`.
 - Scripts typically live in a `scripts/` subdirectory, but may appear
   anywhere within the plugin directory.
 """
