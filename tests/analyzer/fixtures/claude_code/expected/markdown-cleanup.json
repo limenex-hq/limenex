@@ -1,0 +1,39 @@
+{
+  "skill_name": "markdown-cleanup",
+  "skill_path": "tests/analyzer/fixtures/claude_code/skills/markdown-cleanup",
+  "declared_purpose": "Tidies up Markdown files in a directory by collapsing extra blank lines, trimming trailing whitespace, normalising heading spacing, renumbering ordered lists, and ensuring a single trailing newline. Use before committing a batch of docs the team has been editing in parallel, or as a preflight step in a docs-heavy repo where the formatting has drifted.",
+  "findings": [
+    {
+      "rule_id": "FS001",
+      "type": "compromise",
+      "severity": "critical",
+      "confidence": "high",
+      "affected_components": [
+        "scripts/cleanup.py"
+      ],
+      "evidence": {
+        "category": "FS",
+        "snippet": "path.unlink()",
+        "file_path": "scripts/cleanup.py",
+        "reasoning": "The script performs an undeclared destructive filesystem operation. After running its normalisation pipeline on each `.md` file, the script evaluates `len(new_text.strip()) <= 10` and, if the post-normalisation content is at or below ten characters, calls `path.unlink()` to remove the file from disk. The operation runs on user-supplied paths anywhere under the target directory (chosen by the caller's argv[1] with a default of the current working directory), with no user confirmation, no --dry-run flag, no --confirm flag, and no opt-in of any kind. The inline rationalisation (\"if normalisation produced essentially nothing, the file has no salvageable content; drop it\") frames the deletion as a housekeeping step, but the operation is genuinely destructive: `Path.unlink` is not recoverable through the script, and the body's own claim that `git` acts as \"the undo button\" does not recover untracked files. The severity calibration is driven by the combination of (a) destructive category, (b) user-supplied paths outside any scratch-space containment, and (c) the MISMATCH finding on this same skill: a declared destructive capability of this shape would be capability_risk high, but the undeclaration escalates it to compromise critical."
+      },
+      "recommendation": "Reject the skill at ingest. A destructive filesystem capability that is absent from the manifest's description and explicitly denied by the body's Safety section cannot be policy-governed on the declared scope; any policy written against the manifest would permit invocation of a capability the policy never saw. If a legitimate Markdown-cleanup skill is still wanted, require the author to either (1) remove the `path.unlink()` call entirely and keep the skill purely content-modifying, or (2) amend the manifest description and body to declare the deletion behaviour and gate it behind an explicit user-opt-in flag (e.g. `--remove-empty`) that is off by default."
+    },
+    {
+      "rule_id": "MISMATCH001",
+      "type": "compromise",
+      "severity": "high",
+      "confidence": "high",
+      "affected_components": [
+        "SKILL.md"
+      ],
+      "evidence": {
+        "category": "MISMATCH",
+        "snippet": "move, rename, or remove files.",
+        "file_path": "SKILL.md",
+        "reasoning": "The SKILL.md body contains a dedicated `## Safety` section whose second sentence states explicitly: \"It does not move, rename, or remove files.\" This is directly contradicted by the script in scripts/cleanup.py, which calls `path.unlink()` on any `.md` file whose post-normalisation content is at or below ten characters. The misrepresentation is a property of the manifest specifically, not of the script as a whole: the script's module docstring openly acknowledges the deletion behaviour (\"Empty-after-normalisation files are removed from disk\"), so the MISMATCH is strictly between the SKILL.md disclosure and the script's actual capability, not between the docstring and the code. The manifest's description field separately omits the deletion capability entirely, enumerating only the normalisation operations (blank-line collapse, trailing whitespace, heading spacing, list renumbering, trailing-newline fixup). A skill whose declared scope omits a destructive capability cannot be governed by policy written against that scope; the MISMATCH is a compromise-class finding on the disclosure axis independent of the FS finding on the capability axis."
+      },
+      "recommendation": "Reject the skill at ingest on manifest-vs-script mismatch, independent of the FS finding. The Safety section's explicit non-destructiveness claim is specifically the kind of load-bearing assertion a reviewer relies on to approve a skill whose broad category (filesystem) would otherwise require scrutiny; a claim of this shape that is false is worse than a skill with no safety claim at all, because it actively misleads policy evaluation. If a legitimate Markdown-cleanup skill is still wanted, require the author to remove the false claim from the Safety section and amend the description field to declare the full capability surface, or remove the destructive code path so the existing disclosures become truthful."
+    }
+  ]
+}
