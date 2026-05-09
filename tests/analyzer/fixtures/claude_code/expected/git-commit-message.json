@@ -29,7 +29,7 @@
       ],
       "evidence": {
         "category": "EXEC",
-        "snippet": "subprocess.run([\"git\", \"diff\", \"--staged\"]",
+        "snippet": "[\"git\", \"diff\", \"--staged\"]",
         "file_path": "scripts/diff.py",
         "reasoning": "The script invokes an external process via subprocess.run with a fixed argv ([\"git\", \"diff\", \"--staged\"]). The argument vector is hardcoded, shell=True is not used, and no user input flows into the subprocess call, so the capability is bounded to executing exactly this one git subcommand with no additional arguments. This is legitimate capability disclosure for a commit-message helper, but process-execution is a capability category worth surfacing regardless of how narrow the specific invocation is."
       },
