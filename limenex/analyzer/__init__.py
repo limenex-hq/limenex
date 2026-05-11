@@ -17,4 +17,14 @@ extras, so downstream consumers can validate analyzer output without
 installing the full analyzer toolchain.
 """
 
-__all__: list[str] = []
+from limenex.analyzer.providers import (
+    LLMProvider,
+    LLMProviderError,
+    OpenAICompatProvider,
+)
+
+__all__: list[str] = [
+    "LLMProvider",
+    "LLMProviderError",
+    "OpenAICompatProvider",
+]
