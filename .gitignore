@@ -143,3 +143,4 @@ uv.lock
 
 # Project
 tests/analyzer/fixtures/claude_code/skills-real/
+tests/analyzer/fixtures/claude_code/_runs/
