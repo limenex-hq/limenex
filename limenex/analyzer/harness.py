@@ -23,11 +23,41 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from limenex.analyzer.prompts import build_system_prompt, build_user_prompt
+from limenex.analyzer.prompts import (
+    build_system_prompt,
+    build_user_prompt,
+    system_prompt_hash,
+)
 from limenex.analyzer.providers import LLMProvider, LLMProviderError
-from limenex.analyzer.schema import Evidence, Finding, SkillExposure
+from limenex.analyzer.schema import (
+    AnalysisReport,
+    EvaluatorFingerprint,
+    Evidence,
+    Finding,
+    SkillAnalysisError,
+    SkillExposure,
+)
+
+# Intentionally not in __all__; reach via harness module.
+DEFAULT_CONCURRENCY = 5
+
+# Maps model-emitted category strings to rule_id prefixes.
+_CATEGORY_TO_PREFIX: dict[str, str] = {
+    "finance": "FIN",
+    "filesystem": "FS",
+    "comm": "COMM",
+    "web": "WEB",
+    "injection": "INJ",
+    "flow": "FLOW",
+    "mismatch": "MISMATCH",
+}
+
+_FRAMEWORK_MANIFESTS: dict[str, str] = {
+    "claude_code": "SKILL.md",
+    "generic": "SKILL.md",
+}
 
 
 @dataclass(frozen=True)
@@ -185,18 +215,6 @@ class AnalyzeSkillError(Exception):
         self.skill_name = skill_name
         self.reason = message
         super().__init__(f"{skill_name}: {message}")
-
-
-# Maps model-emitted category strings to rule_id prefixes.
-_CATEGORY_TO_PREFIX: dict[str, str] = {
-    "finance": "FIN",
-    "filesystem": "FS",
-    "comm": "COMM",
-    "web": "WEB",
-    "injection": "INJ",
-    "flow": "FLOW",
-    "mismatch": "MISMATCH",
-}
 
 
 def _build_payload(skill: Skill) -> str:
@@ -385,3 +403,110 @@ async def analyze_skill(
         raise AnalyzeSkillError(skill.name, f"provider_failed: {e}") from e
 
     return _parse_response(raw_response, skill)
+
+
+async def analyze_directory(
+    path: Path,
+    provider: LLMProvider,
+    *,
+    framework: str = "claude_code",
+    manifest_name: str | None = None,
+    concurrency: int = DEFAULT_CONCURRENCY,
+    progress: Callable[[int, int], None] | None = None,
+) -> AnalysisReport:
+    """Discover and analyze every skill under ``path``.
+
+    Per-skill ``AnalyzeSkillError`` failures are captured into
+    ``report.errors``; other exceptions propagate.
+
+    Parameters
+    ----------
+    path
+        Directory to scan for skill manifests.
+    provider
+        LLM provider. Caller owns the lifecycle — wrap with
+        ``async with`` at the caller's scope boundary.
+    framework
+        Skill framework identifier. Drives prompt selection and
+        default manifest filename. Must be a key known to
+        ``build_system_prompt``.
+    manifest_name
+        Manifest filename. ``None`` resolves via ``framework``;
+        pass a string to override.
+    concurrency
+        Maximum number of skills analyzed in parallel. Must be
+        ``>= 1``.
+    progress
+        Optional callback ``(done, total)`` fired once per skill
+        after completion (success or failure).
+
+    Raises
+    ------
+    ValueError
+        If ``concurrency < 1``, or if ``framework`` is unknown and
+        ``manifest_name`` is not provided.
+    """
+    if concurrency < 1:
+        raise ValueError(f"concurrency must be >= 1, got {concurrency}")
+
+    if manifest_name is None:
+        try:
+            manifest_name = _FRAMEWORK_MANIFESTS[framework]
+        except KeyError as e:
+            known = ", ".join(sorted(_FRAMEWORK_MANIFESTS))
+            raise ValueError(
+                f"unknown framework {framework!r}. "
+                f"Known frameworks: {known}. Pass manifest_name explicitly "
+                f"to bypass the framework table."
+            ) from e
+
+    skills_found = discover_skills(path, manifest_name)
+    total = len(skills_found)
+    done = 0
+    semaphore = asyncio.Semaphore(concurrency)
+
+    async def _analyze_one(
+        skill: Skill,
+    ) -> tuple[Skill, SkillExposure | AnalyzeSkillError]:
+        nonlocal done
+        async with semaphore:
+            try:
+                outcome: SkillExposure | AnalyzeSkillError = await analyze_skill(
+                    skill, provider, framework=framework
+                )
+            except AnalyzeSkillError as e:
+                outcome = e
+        done += 1
+        if progress is not None:
+            progress(done, total)
+        return skill, outcome
+
+    results = await asyncio.gather(*(_analyze_one(s) for s in skills_found))
+
+    skills: list[SkillExposure] = []
+    errors: list[SkillAnalysisError] = []
+    for skill, outcome in results:
+        if isinstance(outcome, SkillExposure):
+            skills.append(outcome)
+        else:
+            errors.append(
+                SkillAnalysisError(
+                    skill_name=skill.name,
+                    skill_path=str(skill.root),
+                    message=outcome.reason,
+                )
+            )
+
+    provider_fp = provider.fingerprint()
+    evaluator_fingerprint = EvaluatorFingerprint(
+        model=provider_fp.model,
+        temperature=provider_fp.temperature,
+        prompt_template_hash=system_prompt_hash(framework),
+        framework=framework,
+    )
+
+    return AnalysisReport.create(
+        evaluator_fingerprint=evaluator_fingerprint,
+        skills=skills,
+        errors=errors,
+    )

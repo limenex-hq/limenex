@@ -20,6 +20,7 @@ installing the full analyzer toolchain.
 from limenex.analyzer.harness import (
     AnalyzeSkillError,
     Skill,
+    analyze_directory,
     analyze_skill,
     discover_skills,
 )
@@ -37,6 +38,7 @@ __all__: list[str] = [
     "OpenAICompatProvider",
     "ProviderFingerprint",
     "Skill",
+    "analyze_directory",
     "analyze_skill",
     "discover_skills",
 ]
