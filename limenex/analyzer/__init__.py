@@ -27,6 +27,7 @@ from limenex.analyzer.providers import (
     LLMProvider,
     LLMProviderError,
     OpenAICompatProvider,
+    ProviderFingerprint,
 )
 
 __all__: list[str] = [
@@ -34,6 +35,7 @@ __all__: list[str] = [
     "LLMProvider",
     "LLMProviderError",
     "OpenAICompatProvider",
+    "ProviderFingerprint",
     "Skill",
     "analyze_skill",
     "discover_skills",

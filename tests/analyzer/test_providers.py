@@ -12,6 +12,7 @@ from limenex.analyzer.providers import (
     LLMProvider,
     LLMProviderError,
     OpenAICompatProvider,
+    ProviderFingerprint,
     _ERROR_BODY_MAX_CHARS,
 )
 
@@ -217,6 +218,22 @@ async def test_complete_url_join_handles_trailing_slash():
     finally:
         await p.aclose()
     assert route.called
+
+
+# ---------- fingerprint ----------
+
+def test_fingerprint_returns_configured_model_and_temperature() -> None:
+    """fingerprint() reflects the provider's constructor arguments."""
+    provider = OpenAICompatProvider(
+        base_url=BASE_URL,
+        model="gpt-test",
+        api_key="sk-fake",
+        temperature=0.2,
+    )
+    fp = provider.fingerprint()
+    assert isinstance(fp, ProviderFingerprint)
+    assert fp.model == "gpt-test"
+    assert fp.temperature == 0.2
 
 
 # ---------- lifecycle + protocol ----------

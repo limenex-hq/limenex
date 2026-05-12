@@ -11,10 +11,26 @@ provider does NOT raise on semantically wrong model output.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
+
 import httpx
+
 from typing import Any, Protocol, runtime_checkable
 
 _ERROR_BODY_MAX_CHARS = 500
+
+@dataclass(frozen=True)
+class ProviderFingerprint:
+    """Provider-identifying fields for analyzer report fingerprints.
+
+    Returned by ``LLMProvider.fingerprint()``. The analyzer harness
+    combines this with framework and prompt hash to produce a full
+    ``EvaluatorFingerprint`` in the report.
+    """
+
+    model: str
+    temperature: float
+
 
 class LLMProviderError(Exception):
     """Raised by an ``LLMProvider`` on transport or envelope failures.
@@ -71,6 +87,15 @@ class LLMProvider(Protocol):
         ------
         LLMProviderError
             On transport or envelope failure. See class docstring.
+        """
+        ...
+
+    def fingerprint(self) -> ProviderFingerprint:
+        """Return provider-identifying fields for report fingerprinting.
+
+        Two providers with equal fingerprints produce comparable
+        analyses; differing fingerprints mark reports as
+        cross-incomparable.
         """
         ...
 
@@ -181,3 +206,7 @@ class OpenAICompatProvider:
             )
 
         return content
+
+    def fingerprint(self) -> ProviderFingerprint:
+        """Return this provider's identifying configuration."""
+        return ProviderFingerprint(model=self.model, temperature=self.temperature)
