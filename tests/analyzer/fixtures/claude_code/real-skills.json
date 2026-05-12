@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "pinned_at": "2026-05-12",
+  "purpose": "Manifest of real-world Claude Code Skills used to calibrate the analyzer. Fetched on demand by scripts/fetch_real_skills.py. Not vendored.",
+  "skills": [
+    {
+      "name": "ctf_writeup",
+      "repo_url": "https://github.com/ljagiello/ctf-skills",
+      "commit_sha": "1af14f9030fee9da46014a8a3ed61a555b81ab98",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "ctf-writeup",
+      "licence": "MIT",
+      "total_size_kb": 5,
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Task",
+        "WebFetch",
+        "WebSearch"
+      ],
+      "upstream_description": "Document CTF challenge writeups"
+    },
+    {
+      "name": "research_preliminary",
+      "repo_url": "https://github.com/Weizhena/Deep-Research-skills",
+      "commit_sha": "e5479f857f484cde13fe69d2f3ce8de7af193bc7",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "skills/research-en/research",
+      "licence": "MIT",
+      "total_size_kb": 11,
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Glob",
+        "WebSearch",
+        "Task",
+        "AskUserQuestion"
+      ],
+      "upstream_description": "Preliminary research planning with JSON schema validation"
+    },
+    {
+      "name": "docker_development",
+      "repo_url": "https://github.com/alirezarezvani/claude-skills",
+      "commit_sha": "8d3c5784f25d4deaddef2e1ef6e6d4eb30341666",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "engineering/docker-development/skills/docker-development",
+      "licence": "MIT",
+      "total_size_kb": 49,
+      "allowed_tools": null,
+      "upstream_description": "Analyze Dockerfiles and docker-compose configurations for best practices"
+    },
+    {
+      "name": "statistical_analyst",
+      "repo_url": "https://github.com/alirezarezvani/claude-skills",
+      "commit_sha": "8d3c5784f25d4deaddef2e1ef6e6d4eb30341666",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "engineering/statistical-analyst/skills/statistical-analyst",
+      "licence": "MIT",
+      "total_size_kb": 48,
+      "allowed_tools": null,
+      "upstream_description": "Run hypothesis tests, sample-size calculations, and confidence intervals"
+    },
+    {
+      "name": "discord_integration",
+      "repo_url": "https://github.com/OpenHands/extensions",
+      "commit_sha": "75e39288f6c2366b75cf290441da06e187395f63",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "skills/discord",
+      "licence": "MIT",
+      "total_size_kb": 17,
+      "allowed_tools": null,
+      "upstream_description": "Post messages and webhooks to Discord"
+    },
+    {
+      "name": "browser_act",
+      "repo_url": "https://github.com/browser-act/skills",
+      "commit_sha": "39659ebb5e88a7029fda197596a0fd39c0d7462e",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "browser-act",
+      "licence": "MIT",
+      "total_size_kb": 34,
+      "allowed_tools": [
+        "Bash(browser-act:*)"
+      ],
+      "upstream_description": "Drive the browser-act CLI for browser automation"
+    },
+    {
+      "name": "ashare_pre_st_filter",
+      "repo_url": "https://github.com/HKUDS/Vibe-Trading",
+      "commit_sha": "861e20dce46fd4c24f97ec65a784c2b1baf5688b",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "agent/src/skills/ashare-pre-st-filter",
+      "licence": "MIT",
+      "total_size_kb": 54,
+      "allowed_tools": null,
+      "upstream_description": "Pre-filter A-share stocks flagged as ST using Sina Finance data"
+    },
+    {
+      "name": "gmail_email",
+      "repo_url": "https://github.com/open-gitagent/gitagent",
+      "commit_sha": "05bb44166e4203695dc0f5ee4ec175b6f50efa7a",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "skills/gmail-email",
+      "licence": "MIT",
+      "total_size_kb": 4.8,
+      "allowed_tools": null,
+      "upstream_description": "Send email via Gmail SMTP"
+    },
+    {
+      "name": "telegram_bot_builder",
+      "repo_url": "https://github.com/davila7/claude-code-templates",
+      "commit_sha": "d9d581997bb27fbd55705d33dceb1ae316d86aac",
+      "upstream_branch_at_pinning": "main",
+      "path_in_repo": "cli-tool/components/skills/development/telegram-bot-builder",
+      "licence": "MIT",
+      "total_size_kb": 73.8,
+      "allowed_tools": null,
+      "upstream_description": "Build Telegram bots using the Telegram Bot API"
+    },
+    {
+      "name": "python_binance",
+      "repo_url": "https://github.com/sammchardy/python-binance",
+      "commit_sha": "b697c97a94901d79786dd5d899a40268953aa0f5",
+      "upstream_branch_at_pinning": "master",
+      "path_in_repo": ".agents/skills/python-binance",
+      "licence": "MIT",
+      "total_size_kb": 6.7,
+      "allowed_tools": null,
+      "upstream_description": "Use the python-binance SDK to interact with the Binance exchange"
+    }
+  ]
+}
