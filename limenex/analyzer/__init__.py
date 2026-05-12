@@ -17,7 +17,12 @@ extras, so downstream consumers can validate analyzer output without
 installing the full analyzer toolchain.
 """
 
-from limenex.analyzer.harness import Skill, discover_skills
+from limenex.analyzer.harness import (
+    AnalyzeSkillError,
+    Skill,
+    analyze_skill,
+    discover_skills,
+)
 from limenex.analyzer.providers import (
     LLMProvider,
     LLMProviderError,
@@ -25,9 +30,11 @@ from limenex.analyzer.providers import (
 )
 
 __all__: list[str] = [
+    "AnalyzeSkillError",
     "LLMProvider",
     "LLMProviderError",
     "OpenAICompatProvider",
     "Skill",
+    "analyze_skill",
     "discover_skills",
 ]

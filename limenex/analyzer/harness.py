@@ -7,6 +7,10 @@ for Codex / OpenCode / LangGraph skills with their respective manifest
 filenames). Returns ``Skill`` objects the harness feeds to an
 ``LLMProvider``.
 
+``analyze_skill(skill, provider, *, framework)`` analyses one
+discovered skill against one provider and returns a ``SkillExposure``.
+Raises ``AnalyzeSkillError`` on any failure.
+
 Frameworks with fundamentally different shapes (e.g. MCP, where one
 JSON manifest enumerates many tools) need their own discovery
 function; this one is only appropriate for the per-directory-plugin
@@ -14,9 +18,16 @@ pattern.
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from limenex.analyzer.prompts import build_system_prompt, build_user_prompt
+from limenex.analyzer.providers import LLMProvider, LLMProviderError
+from limenex.analyzer.schema import Evidence, Finding, SkillExposure
 
 
 @dataclass(frozen=True)
@@ -160,3 +171,217 @@ def discover_skills(
         )
 
     return skills
+
+
+class AnalyzeSkillError(Exception):
+    """Raised by ``analyze_skill`` on any per-skill failure.
+
+    Covers payload build, LLM transport, JSON parse, and response
+    shape failures. Carries ``skill_name`` so aggregating callers can
+    record which skill failed without re-parsing the message.
+    """
+
+    def __init__(self, skill_name: str, message: str) -> None:
+        self.skill_name = skill_name
+        self.reason = message
+        super().__init__(f"{skill_name}: {message}")
+
+
+# Maps model-emitted category strings to rule_id prefixes.
+_CATEGORY_TO_PREFIX: dict[str, str] = {
+    "finance": "FIN",
+    "filesystem": "FS",
+    "comm": "COMM",
+    "web": "WEB",
+    "injection": "INJ",
+    "flow": "FLOW",
+    "mismatch": "MISMATCH",
+}
+
+
+def _build_payload(skill: Skill) -> str:
+    """Concatenate a skill's files into the BEGIN/END payload format.
+
+    Files are emitted in ``Skill.files`` order (manifest first, rest
+    alphabetical). Each file is prefixed with a
+    ``=== FILE: <relpath> ===`` line. Relative paths use POSIX
+    separators so payload hashes are stable across host OSes.
+
+    Size-cap enforcement and BEGIN/END marker-collision detection are
+    delegated to ``build_user_prompt``, which raises ``ValueError`` on
+    either condition.
+    """
+    parts: list[str] = []
+    for path in skill.files:
+        relpath = path.relative_to(skill.root).as_posix()
+        content = path.read_text(encoding="utf-8")
+        parts.append(f"=== FILE: {relpath} ===\n{content}")
+    return "\n\n".join(parts)
+
+
+async def _complete_with_retry(
+    provider: LLMProvider, messages: list[dict[str, str]]
+) -> str:
+    """Call ``provider.complete`` with a single retry on ``LLMProviderError``.
+
+    Fixed 2-second sleep between attempts. Other exceptions bubble
+    unchanged.
+    """
+    try:
+        return await provider.complete(
+            messages, response_format={"type": "json_object"}
+        )
+    except LLMProviderError:
+        await asyncio.sleep(2.0)
+        return await provider.complete(
+            messages, response_format={"type": "json_object"}
+        )
+
+
+def _reshape_finding(
+    raw: dict[str, Any], skill_name: str, counters: dict[str, int]
+) -> Finding:
+    """Convert a model-emitted finding dict into a schema ``Finding``.
+
+    The model emits ``category`` and ``reasoning`` at finding-level;
+    the schema nests both inside ``Evidence``. This function performs
+    the re-nesting and stamps ``rule_id`` (per-skill sequential,
+    format ``<PREFIX>###``) and ``affected_components``
+    (``[skill_name]``). ``policy_scaffold`` is always ``None``.
+
+    Raises ``KeyError`` on missing required fields, ``ValueError`` on
+    unknown category.
+    """
+    category = raw["category"]
+    try:
+        prefix = _CATEGORY_TO_PREFIX[category]
+    except KeyError as e:
+        raise ValueError(f"unknown finding category {category!r}") from e
+
+    counters[prefix] = counters.get(prefix, 0) + 1
+    rule_id = f"{prefix}{counters[prefix]:03d}"
+
+    raw_evidence = raw["evidence"]
+    line_range_raw = raw_evidence.get("line_range")
+    line_range: tuple[int, int] | None = None
+    if line_range_raw is not None:
+        line_range = (int(line_range_raw[0]), int(line_range_raw[1]))
+
+    evidence = Evidence(
+        category=category,
+        snippet=raw_evidence["snippet"],
+        file_path=raw_evidence["file_path"],
+        reasoning=raw["reasoning"],
+        line_range=line_range,
+    )
+
+    return Finding(
+        rule_id=rule_id,
+        type=raw["type"],
+        severity=raw["severity"],
+        confidence=raw["confidence"],
+        affected_components=[skill_name],
+        evidence=evidence,
+        recommendation=raw["recommendation"],
+        policy_scaffold=None,
+    )
+
+
+def _parse_response(raw_json: str, skill: Skill) -> SkillExposure:
+    """Parse the model's JSON output into a ``SkillExposure``.
+
+    Raises ``AnalyzeSkillError`` tagged ``parse_failed`` on JSON
+    decode failure, or ``invalid_response_shape`` on missing/wrong
+    fields. The offending content is truncated to 500 chars in the
+    exception message.
+    """
+    try:
+        data = json.loads(raw_json)
+    except json.JSONDecodeError as e:
+        excerpt = raw_json[:500]
+        raise AnalyzeSkillError(
+            skill.name,
+            f"parse_failed: model response was not valid JSON ({e.msg}); "
+            f"excerpt: {excerpt!r}",
+        ) from e
+
+    if not isinstance(data, dict):
+        raise AnalyzeSkillError(
+            skill.name,
+            f"invalid_response_shape: top-level JSON is {type(data).__name__}, "
+            f"expected object",
+        )
+
+    try:
+        declared_purpose = data["declared_purpose"]
+        raw_findings = data["findings"]
+        counters: dict[str, int] = {}
+        findings = [_reshape_finding(f, skill.name, counters) for f in raw_findings]
+    except (KeyError, TypeError, ValueError) as e:
+        raise AnalyzeSkillError(
+            skill.name, f"invalid_response_shape: {e}"
+        ) from e
+
+    return SkillExposure(
+        skill_name=skill.name,
+        skill_path=str(skill.root),
+        declared_purpose=declared_purpose,
+        findings=findings,
+    )
+
+
+async def analyze_skill(
+    skill: Skill,
+    provider: LLMProvider,
+    *,
+    framework: str = "claude_code",
+) -> SkillExposure:
+    """Analyze a single discovered skill against a provider.
+
+    Orchestrates payload construction, prompt rendering, the LLM call
+    (with a single retry on transport failure), JSON parse, and
+    reshape into a ``SkillExposure``.
+
+    Parameters
+    ----------
+    skill
+        A ``Skill`` produced by ``discover_skills``.
+    provider
+        An ``LLMProvider`` implementation. The caller owns its
+        lifecycle (e.g. entering / exiting its async context manager).
+    framework
+        Skill framework identifier passed to prompt rendering.
+        Default ``"claude_code"``. Must be a key known to
+        ``build_system_prompt``.
+
+    Returns
+    -------
+    SkillExposure
+        Structured analysis of the skill.
+
+    Raises
+    ------
+    AnalyzeSkillError
+        On payload build failure (size cap, marker collision), LLM
+        transport failure after retry, JSON decode failure, or
+        response shape error. Other exceptions (e.g. unknown
+        framework) propagate unchanged.
+    """
+    try:
+        payload = _build_payload(skill)
+        system_prompt = build_system_prompt(framework)
+        user_prompt = build_user_prompt(payload)
+    except ValueError as e:
+        raise AnalyzeSkillError(skill.name, f"payload_rejected: {e}") from e
+
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        raw_response = await _complete_with_retry(provider, messages)
+    except LLMProviderError as e:
+        raise AnalyzeSkillError(skill.name, f"provider_failed: {e}") from e
+
+    return _parse_response(raw_response, skill)
